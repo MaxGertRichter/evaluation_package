@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "evaluation_package"
+version = "0.1.0"
+description = "Package for evaluating quantum sensing experiments including ESR and Rabi measurements"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+authors = [
+    { name = "Max Richter", email = "maxgert.richter@tum.de" }
+]
+dependencies = [
+    "numpy>=1.20.0",
+    "scipy>=1.7.0",
+    "ruamel.yaml>=0.17.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/evaluation_package"
+Repository = "https://github.com/yourusername/evaluation_package.git"
