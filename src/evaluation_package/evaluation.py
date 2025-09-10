@@ -20,11 +20,15 @@ def get_light_level(yaml_config: dict, data: np.ndarray) -> float:
     Returns:
         float: The calculated average light level in milli Volts.
     """
+    averaging_mode = yaml_config["data"]["averaging_mode"]
     number_meas = yaml_config['sensor']['config']['number_measurements']
     av = yaml_config['averages']
     read_trigs = data.shape[0]
-    lightlevel = np.average(data[0].flatten())/(number_meas/read_trigs * av)
-    return lightlevel * 1e3
+    if averaging_mode == "sum":
+        lightlevel = np.average(data[0].flatten())/(number_meas/2)
+    elif averaging_mode == "spread":
+        lightlevel = np.average(data[0].flatten())/(av)
+    return lightlevel
 
 
 #--------------ESR----------------------

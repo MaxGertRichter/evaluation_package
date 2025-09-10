@@ -57,7 +57,7 @@ def get_datafolder_home()-> str:
     if platform.system() == "Windows":
         directory = r"G:\Bucherlab\Sensitivity_Optimization"
     elif platform.system() == "Darwin":  # macOS
-        directory = "/Volumes/001/Bucherlab/Sensitivity_Optimization"
+        directory = "/System/Volumes/Data/mnt/lab_cloud/Bucherlab/Sensitivity_Optimization"
     else:
         raise OSError("Unsupported operating system")
     return directory
