@@ -2,13 +2,28 @@ import os
 import platform
 from ruamel.yaml import YAML, YAMLError
 import numpy as np
-
+from io import StringIO
+from pathlib import Path
+from typing import Any, Dict
 
 yaml = YAML(typ = 'safe', pure = True)
 yaml.preserve_quotes = True
 
-
 from datetime import datetime
+
+def load_yaml(path: Path) -> Dict[str, Any]:
+    with open(path, "r") as f:
+        return yaml.load(f)
+
+
+
+def save_yaml(data, path):
+    buf = StringIO()
+    yaml.dump(data, buf)
+    text = buf.getvalue()
+    with open(path, "w") as f:
+        f.write(text)
+
 
 def get_data_file(path: str, experiment_type: str, extension: str, date_key: str | None = None) -> str:
     """

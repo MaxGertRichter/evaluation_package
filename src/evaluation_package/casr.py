@@ -2,7 +2,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 from scipy import constants
 from scipy.optimize import curve_fit
-from scipy.signal import savgol_filter, find_peaks
+from scipy.signal import savgol_filter, find_peaks, peak_widths
 
 
 #-----------General CASR functions----------------
@@ -43,7 +43,7 @@ def calc_fourier_frequencies(cfg: dict) -> np.ndarray:
 
 def calc_fourier_transform(data: np.ndarray) -> np.ndarray:
     final = np.squeeze(calc_contrast(data)) # maybe move the squeeze some where else in the future
-    fft_final = np.abs(np.fft.rfft(final))
+    fft_final = np.abs(np.fft.rfft(final, norm ="ortho"))
     return fft_final
 
 
@@ -192,7 +192,7 @@ def plot_casr_clibration(yaml_config: dict, data: np.ndarray) -> None:
     backfold_id = find_backfolding_index(contrast)
     maximas_backfolding = contrast[:, backfold_id]
     v_axis = calc_Vpp_list(yaml_config)
-    opt, _ = curve_fit(b_sine, v_axis, maximas_backfolding, p0=[v_axis[-1], 0, max(maximas_backfolding), 10])
+    opt, _ = curve_fit(b_sine, v_axis, maximas_backfolding, p0=[v_axis[-1], 0, max(maximas_backfolding), 0])
     b_ac = calc_b_ac(yaml_config)
     C = b_ac/opt[0]
     V_for_10_nT = 10e-9 / C
@@ -269,7 +269,128 @@ def find_peak_near(x, y, f0, window_hz=None, window_bins=5):
 
     return idx, x[idx], y[idx]
 
-def calc_sensitivity(yaml_config: dict, data: np.ndarray, f0:float = 500, **kwargs)-> tuple[float, float]:
+def noise_only_mask(
+    f: np.ndarray,
+    psd: np.ndarray,
+    *,
+    prominence: float = None,
+    height: float = None,
+    distance_hz: float = None,
+    width_hz: float = None,
+    rel_pad: float = 0.1,       # extra padding as a fraction of the peak width
+    abs_pad_hz: float = 0.0,    # extra absolute padding in Hz
+    fmin: float = None,
+    fmax: float = None,
+):
+    """
+    Build a boolean mask (True = noise-only) by cutting out peak regions.
+
+    Parameters
+    ----------
+    f : array
+        Frequency axis (Hz), 1D, ascending, uniform spacing preferred.
+    psd : array
+        Spectrum/PSD/magnitude for corresponding bins (same shape as f).
+    prominence, height, distance_hz, width_hz :
+        Tuning for peak detection (passed to scipy.signal.find_peaks).
+        - distance_hz is converted to 'distance' in samples.
+        - width_hz sets a minimum width in samples for peaks.
+    rel_pad : float
+        Fractional padding added to each side of the detected peak width.
+        e.g. 0.1 means 10% of the (left,right) width each side.
+    abs_pad_hz : float
+        Absolute padding (Hz) added in addition to the relative padding.
+    fmin, fmax : float
+        Optional band limit; mask is False outside [fmin, fmax].
+
+    Returns
+    -------
+    mask : boolean array
+        True for noise-only bins; False where peaks (plus padding) exist
+        or outside [fmin, fmax] if given.
+    peaks : dict
+        Information on detected peaks: indices, freqs, widths_hz, intervals_hz.
+    """
+    f = np.asarray(f)
+    psd = np.asarray(psd)
+    assert f.ndim == 1 and psd.ndim == 1 and f.size == psd.size
+
+    # frequency resolution (assume uniform grid)
+    df = np.median(np.diff(f))
+
+    # Convert user-friendly params from Hz to samples
+    distance = int(np.ceil(distance_hz / df)) if distance_hz else None
+    width_samples = int(np.ceil(width_hz / df)) if width_hz else None
+
+    # 1) Find peaks
+    idx, props = find_peaks(psd,
+                            prominence=prominence,
+                            height=height,
+                            distance=distance,
+                            width=width_samples)
+
+    # 2) Estimate peak widths at half-prominence (in samples)
+    #    Returns (widths, h_eval, left_ips, right_ips) with float indices
+    if idx.size > 0:
+        widths_s, _, left_ips, right_ips = peak_widths(psd, idx, rel_height=0.5)
+    else:
+        widths_s = np.array([])
+        left_ips = np.array([])
+    # 3) Build exclusion intervals per peak, with padding
+    intervals = []
+    for i, w_s in enumerate(widths_s):
+        # base interval in samples
+        left = left_ips[i]
+        right = right_ips[i]
+        # padding in samples: relative to width + absolute in Hz
+        pad_s = rel_pad * w_s + (abs_pad_hz / df)
+        L = max(0, int(np.floor(left - pad_s)))
+        R = min(psd.size - 1, int(np.ceil(right + pad_s)))
+        # to Hz interval
+        intervals.append((f[L], f[R]))
+
+    # 4) Merge overlapping intervals
+    def merge_intervals(ivals):
+        if not ivals:
+            return []
+        ivals = sorted(ivals, key=lambda x: x[0])
+        merged = [ivals[0]]
+        for s, e in ivals[1:]:
+            last_s, last_e = merged[-1]
+            if s <= last_e:
+                merged[-1] = (last_s, max(last_e, e))  # extend
+            else:
+                merged.append((s, e))
+        return merged
+
+    merged_intervals = merge_intervals(intervals)
+
+    # 5) Build mask: start with all True (noise), then cut out merged intervals
+    mask = np.ones_like(psd, dtype=bool)
+
+    # Optional band-limits
+    if fmin is not None:
+        mask &= (f >= fmin)
+    if fmax is not None:
+        mask &= (f <= fmax)
+
+    for (a, b) in merged_intervals:
+        L = max(0, int(np.floor((a - f[0]) / df)))
+        R = min(psd.size - 1, int(np.ceil((b - f[0]) / df)))
+        mask[L:R+1] = False
+
+    peaks_info = {
+        "indices": idx,
+        "freqs_hz": f[idx] if idx.size else np.array([]),
+        "widths_hz": widths_s * df if idx.size else np.array([]),
+        "intervals_hz": merged_intervals,
+        "prominences": props.get("prominences", None),
+        "heights": props.get("peak_heights", None),
+    }
+    return mask, peaks_info
+
+
+def calc_sensitivity(yaml_config: dict, data: np.ndarray, f0:float = 500, **kwargs)-> tuple[float, float, float]:
     """Calculates the sensitivity and SNR of a singleshot CASR measurement.
 
     Parameters
@@ -283,12 +404,17 @@ def calc_sensitivity(yaml_config: dict, data: np.ndarray, f0:float = 500, **kwar
 
     Returns
     -------
-    tuple[float, float]
-        sensitivity in T/√Hz and normalized SNR
+    tuple[float, float, float]
+        sensitivity in T/√Hz and normalized SNR and std of the noise
     """
+    prominence = kwargs.get("prominence", 0.005)
+    rel_pad = kwargs.get("rel_pad", 10)
     mask_index = kwargs.get("mask_index", 20)
     window_hz = kwargs.get("window_hz", None)
+    width_hz = kwargs.get("width_hz", 1)
     window_bins = kwargs.get("window_bins", 5)
+
+    
 
     frequencies = calc_fourier_frequencies(yaml_config)[mask_index:]
     fft_spectrum = calc_fourier_transform(data)[mask_index:]
@@ -297,7 +423,9 @@ def calc_sensitivity(yaml_config: dict, data: np.ndarray, f0:float = 500, **kwar
     # rescale the amplitude
     fft_spectrum_normalized = fft_spectrum/amp
 
-    snr = 1/np.std(fft_spectrum_normalized[len(fft_spectrum_normalized)//2:])
+    noise_mask, peak_info = noise_only_mask(frequencies, fft_spectrum, prominence=prominence, rel_pad=rel_pad, width_hz=width_hz)
+    std = np.std(fft_spectrum_normalized[noise_mask])
+    snr = 1/std
     sensitivity = 10e-9 /snr * np.sqrt(measurement_time) # in T/√Hz
 
-    return sensitivity, snr
+    return sensitivity, snr, std
