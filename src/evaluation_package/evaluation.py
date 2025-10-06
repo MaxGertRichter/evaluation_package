@@ -30,6 +30,24 @@ def get_light_level(yaml_config: dict, data: np.ndarray) -> float:
         lightlevel = np.average(data[0].flatten())/(av)
     return lightlevel
 
+def calc_ref_mess_voltage(data: np.ndarray,) -> tuple[float, float]:
+    """Calcualtes the voltage level of the reference and measurement signal.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Data array of the measurment
+
+    Returns
+    -------
+    tuple[float, float]
+        Mean voltage of the reference and measurement signal
+    """
+    ref = data[0].flatten()
+    mess = data[1].flatten()
+    return np.mean(ref), np.mean(mess)
+
+
 
 #--------------ESR----------------------
 def get_x_ESR_array(yaml_config: dict) -> np.ndarray:

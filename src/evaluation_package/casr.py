@@ -165,7 +165,7 @@ def find_backfolding_index(contrast: np.ndarray) -> int:
     """
     summed_contrast = np.sum(contrast, axis=0)
     dict_minmax = find_special_dips(summed_contrast)
-    backfold_id = dict_minmax["slow_maxima"][0]
+    backfold_id = dict_minmax["slow_minima"][1]
     return backfold_id
 
 
