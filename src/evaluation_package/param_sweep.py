@@ -38,17 +38,20 @@ def format_value_for_filename(val: Any) -> str:
 def make_filename(base_stem: str,
                   sweep_items: Dict[str, Any],
                   index: Optional[int] = None,
-                  pad_width: Optional[int] = None) -> str:
-    """Filename like: 01__CASR_sensitivity__mixing_frequency-5.000e08__N-16.yaml"""
+                  pad_width: Optional[int] = None,
+                  repetition: Optional[int] = None) -> str:
+    """Filename like: 01__CASR_sensitivity__mixing_frequency-5.000e08__N-16__rep-1.yaml"""
     parts = []
     for k, v in sweep_items.items():
         short = k.split(".")[-1]
         parts.append(f"{short}-{format_value_for_filename(v)}")
+    if repetition is not None:
+        parts.append(f"rep-{repetition}")
     middle = "__".join(parts)
     core = f"{base_stem}__{middle}.yaml" if middle else f"{base_stem}.yaml"
     if index is not None:
         if pad_width is None:
-            pad_width = max(2, len(str(index)))  # default at least 2 digits
+            pad_width = max(2, len(str(index)))
         prefix = f"{str(index).zfill(pad_width)}__"
         return prefix + core
     return core
@@ -81,16 +84,16 @@ def generate_sweeps(
     base_yaml: Path,
     out_dir: Path,
     sweeps: Dict[str, List[Any]],
-    mode: str = "cartesian",             # "cartesian" or "zip"
-    prefix_index: bool = True,           # add 01__, 02__, ...
-    start_index: int = 1,                # first index value
-    pad_width: Optional[int] = None,     # None -> auto from total count (>=2)
-    order_by: Optional[List[str]] = None # optional dotted keys to sort by before numbering
+    mode: str = "cartesian",
+    prefix_index: bool = True,
+    start_index: int = 1,
+    pad_width: Optional[int] = None,
+    order_by: Optional[List[str]] = None,
+    repetitions: int = 1
 ):
     out_dir.mkdir(parents=True, exist_ok=True)
     base_stem = base_yaml.stem
 
-    # 1) Materialize combinations in the generation order
     if mode == "cartesian":
         combos = _cartesian_dicts(sweeps)
     elif mode == "zip":
@@ -98,28 +101,28 @@ def generate_sweeps(
     else:
         raise ValueError("mode must be 'cartesian' or 'zip'")
 
-    # 2) Optional sorting by one or more dotted keys
     combos = _sort_combos(combos, order_by)
-
-    # 3) Figure out padding once (total count)
-    total = len(combos)
+    total = len(combos) * repetitions
     if pad_width is None:
         pad_width = max(2, len(str(start_index + total - 1)))
 
-    # 4) Generate files in that fixed order, adding index prefix if requested
     results = []
-    for i, values in enumerate(combos, start=start_index):
-        cfg = load_yaml(base_yaml)
-        for dotted_key, v in values.items():
-            set_by_dotted_path(cfg, dotted_key, v)
-        fname = make_filename(
-            base_stem,
-            values,
-            index=i if prefix_index else None,
-            pad_width=pad_width
-        )
-        out_path = out_dir / fname
-        save_yaml(cfg, out_path)
-        results.append(out_path)
+    current_index = start_index
+    for values in combos:
+        for rep in range(1, repetitions + 1):
+            cfg = load_yaml(base_yaml)
+            for dotted_key, v in values.items():
+                set_by_dotted_path(cfg, dotted_key, v)
+            fname = make_filename(
+                base_stem,
+                values,
+                index=current_index if prefix_index else None,
+                pad_width=pad_width,
+                repetition=rep if repetitions > 1 else None
+            )
+            out_path = out_dir / fname
+            save_yaml(cfg, out_path)
+            results.append(out_path)
+            current_index += 1
 
     return results

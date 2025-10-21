@@ -37,8 +37,11 @@ def calc_fourier_frequencies(cfg: dict) -> np.ndarray:
     np.ndarray
         The fourier frequency axis
     """
+    # this needs to be implemented in the other cases also
+    #adjusted_samples = calc_adjusted_samples(cfg)
     sensing_time = cfg["duration_puseseq_cycle"] * 1e-6
     samples = cfg["pulse_sequence"]["n_meas"] // 2
+    # old number of samples
     return np.fft.rfftfreq(samples, d=sensing_time)
 
 def calc_fourier_transform(data: np.ndarray) -> np.ndarray:
@@ -46,6 +49,51 @@ def calc_fourier_transform(data: np.ndarray) -> np.ndarray:
     fft_final = np.abs(np.fft.rfft(final, norm ="ortho"))
     return fft_final
 
+
+def calc_calibration_freqeuncy(yaml_config: dict) -> float:
+    """Calculate the calibration frequency based on the pulse sequence parameters.
+
+    Args:
+        yaml_config (dict): The configuration dictionary containing pulse sequence parameters.
+
+    Returns:
+        float: The calculated calibration frequency in Hz.
+    """
+    tau = yaml_config["pulse_sequence"]["tau"] * 1e-6  # Convert microseconds to seconds
+    rf_freq = yaml_config["static_devices"]["rf_source"]["config"]["frequency"]
+    sensing_freq = 1 / (4 * tau)
+    calibration_freq = np.abs(rf_freq - sensing_freq)
+    return calibration_freq
+
+def calc_adjusted_samples(yaml_config: dict) -> tuple[int, float]:
+    """Calculates the adjusted number of measurements for a CASR meausrement to fit a integer 
+    number of calibration signals in the measurement block.
+
+    Parameters
+    ----------
+    yaml_config : dict
+        The configuration yaml_file to configrue the CASR experiment.
+
+    Returns
+    -------
+    tuple[int, float]
+        The adjusted number of samples and the number of calibration periodes that fit in the measurement block.
+    """
+    frequency = calc_calibration_freqeuncy(yaml_config)
+    delta_t = yaml_config["duration_puseseq_cycle"] * 1e-6  # Convert microseconds to seconds
+    N_initial = yaml_config["pulse_sequence"]["n_meas"] // 2  # Initial number of samples (half of n_meas)
+    period = 1 / frequency
+    
+    # Calculate the total time for the initial number of samples
+    total_time = N_initial * delta_t
+    
+    # Find the closest total time to an integer number of cycles
+    closest_total_time = round(total_time / period) * period
+    
+    # Calculate the adjusted number of samples
+    adjusted_N_initial = round(closest_total_time / delta_t)
+    N_cycles = closest_total_time / period
+    return adjusted_N_initial, N_cycles
 
 
 #-----------CASR calibration functions-----------------
@@ -221,8 +269,8 @@ def check_backfolding_index(contrast: np.ndarray) -> None:
 
 def calc_measurement_time(yaml_config: dict) -> float:
     pulse_sequence_duration = yaml_config["duration_puseseq_cycle"] * 1e-6 # in seconds
-    n_meas = yaml_config["sensor"]["config"]["number_measurements"]
-    measurement_time = pulse_sequence_duration * n_meas
+    n_meas = yaml_config["sensor"]["config"]["number_measurements"]//2
+    measurement_time = pulse_sequence_duration * n_meas # this must be divided by two???
     return measurement_time
 
 def find_peak_near(x, y, f0, window_hz=None, window_bins=5):

@@ -219,7 +219,6 @@ class SweepDataHandler:
         # Load data
         self._generate_data_handler(glob_pattern)
         self._extract_data()
-        self._extract_sweep_number()
         
     def _generate_data_handler(self, glob_pattern: str) -> None:
         """Generate SweepSet data handler."""
@@ -233,16 +232,44 @@ class SweepDataHandler:
         )
         print(self.sweepset.manifest.head(20))
     
-    def _extract_sweep_number(self) -> None:
-        self.sweep_number = len(self.configs)
 
     def _extract_data(self) -> None:
-        """Extract data from sweepset."""
-        self.yaml_key_params = np.array(self.sweepset.params(self.yaml_key))
-        self.data_array = self.sweepset.stack()
-        self.configs = [load_yaml(path) 
-                       for path in self.sweepset.manifest["yaml_path"]]
+        """Extract data from sweepset and group by unique parameters."""
+        # Get all parameter values
+        all_params = self.sweepset.params(self.yaml_key)
         
+        # Get unique parameters
+        self.yaml_key_params = np.array(sorted(set(all_params)))
+        
+        # Group data and configs
+        data_list = []
+        config_list = []
+        
+        for param in self.yaml_key_params:
+            # Find indices for this parameter
+            param_indices = [i for i, p in enumerate(all_params) if p == param]
+            
+            # Group data and configs for this parameter
+            param_data = np.stack([self.sweepset.stack()[i] for i in param_indices])
+            param_configs = [load_yaml(self.sweepset.manifest["yaml_path"].iloc[i]) 
+                           for i in param_indices]
+            
+            data_list.append(param_data)
+            config_list.append(param_configs)
+        
+        # Store as numpy arrays
+        self.data_array = np.array(data_list)  # Shape: (n_params, n_reps, ...)
+        self.configs = config_list  # List[List[dict]]
+        self.sweep_number = len(self.yaml_key_params)
+
+    def get_repetition_data(self, param_idx: int, rep_idx: int) -> np.ndarray:
+        """Get data for specific parameter and repetition."""
+        return self.data_array[param_idx][rep_idx]
+      
+    def get_parameter_data(self, param_idx: int) -> np.ndarray:
+        """Get all repetitions for a parameter."""
+        return self.data_array[param_idx]
+
     @property
     def parameters(self) -> List[Any]:
         """Get parameters for yaml key."""
