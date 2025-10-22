@@ -4,7 +4,7 @@ from __future__ import annotations
 # datahandler.py
 from evaluation_package.filetools import load_yaml
 import evaluation_package.casr as casr
-import evaluation_package.evaluation as ev
+import evaluation_package.legacy.evaluation as ev
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union, Callable
@@ -375,27 +375,27 @@ class SweepSet:
         
         Args:
             func: Function to process data. Supported signatures:
+                - func(yaml_config, data, **kwargs)  # Your common format
+                - func(data, yaml_config, **kwargs)  # Alternative format
                 - func(data, **kwargs)
-                - func(data, yaml_config, **kwargs)
-                - func(data, params, **kwargs)
-                - func(data, yaml_config, params, **kwargs)
-                - func(yaml_config, **kwargs)  # For config-only processing
+                - func(yaml_config, **kwargs)
+                - func(params, **kwargs)
+                - Any combination of these parameters
             **kwargs: Additional keyword arguments passed to func
         
         Returns:
-            Array with same shape as data array except the data dimensions are 
-            replaced with the shape of the function output
+            Array with processed results matching the sweep structure
         """
         
         # Ensure data is loaded
         if self._data is None:
             self.load_data()
         
-        # Inspect function signature to determine needed arguments
+        # Inspect function signature
         sig = inspect.signature(func)
         param_names = list(sig.parameters.keys())
         
-        # Check what the function needs
+        # Detect required arguments
         needs_data = 'data' in param_names
         needs_yaml = 'yaml_config' in param_names
         needs_params = 'params' in param_names
@@ -403,17 +403,17 @@ class SweepSet:
         # Get parameter grid if needed
         param_grid = self.get_parameter_grid() if needs_params else None
         
-        # Process first non-nan item to determine output shape
+        # Find first non-nan data point
         sample_idx = None
         for idx in np.ndindex(self.shape):
-            if not np.isnan(self._data[idx]).all():
+            if not isinstance(self._data[idx], np.ndarray) or not np.isnan(self._data[idx]).all():
                 sample_idx = idx
                 break
                 
         if sample_idx is None:
             raise ValueError("All data points are NaN")
         
-        # Build argument dictionary for sample execution
+        # Build keyword arguments for sample execution
         sample_args = {}
         if needs_data:
             sample_args['data'] = self._data[sample_idx]
@@ -429,7 +429,7 @@ class SweepSet:
         # Determine output shape
         if isinstance(sample_output, (int, float, bool, str)):
             output_shape = self.shape + (1,)
-            output_dtype = type(sample_output)
+            output_dtype = float  # Use float for scalars for better NaN handling
         elif isinstance(sample_output, np.ndarray):
             output_shape = self.shape + sample_output.shape
             output_dtype = sample_output.dtype
@@ -447,32 +447,40 @@ class SweepSet:
         
         # Process all data
         for idx in np.ndindex(self.shape):
-            # Build argument dictionary
-            args = {}
-            if needs_data:
-                args['data'] = self._data[idx]
-            if needs_yaml:
-                args['yaml_config'] = self.get_yaml_config(*idx)
-            if needs_params:
-                args['params'] = param_grid[idx] if param_grid is not None else None
-            args.update(kwargs)
-            
-            # Skip if needed data is NaN
-            if needs_data and isinstance(args['data'], np.ndarray) and np.isnan(args['data']).all():
+            try:
+                # Build keyword arguments
+                args = {}
+                if needs_data:
+                    args['data'] = self._data[idx]
+                if needs_yaml:
+                    args['yaml_config'] = self.get_yaml_config(*idx)
+                    if args['yaml_config'] is None:  # Skip if YAML config is missing
+                        result[idx] = np.nan if isinstance(sample_output, np.ndarray) else np.full(sample_output.shape, np.nan)
+                        continue
+                if needs_params:
+                    args['params'] = param_grid[idx] if param_grid is not None else None
+                args.update(kwargs)
+                
+                # Skip if needed data is NaN
+                if needs_data and isinstance(args['data'], np.ndarray) and np.isnan(args['data']).all():
+                    result[idx] = np.nan if not isinstance(sample_output, np.ndarray) else np.full(sample_output.shape, np.nan)
+                    continue
+                    
+                # Apply function with keyword arguments (order doesn't matter)
+                output = func(**args)
+                
+                # Store result
+                if isinstance(output, (int, float, bool, str)) and output_shape[-1] == 1:
+                    result[idx] = float(output)
+                else:
+                    result[idx] = np.array(output)
+                    
+            except Exception as e:
+                print(f"Error processing index {idx}: {str(e)}")
                 if isinstance(sample_output, np.ndarray):
                     result[idx] = np.full(sample_output.shape, np.nan)
                 else:
                     result[idx] = np.nan
-                continue
-            
-            # Apply function
-            output = func(**args)
-            
-            # Store result
-            if isinstance(output, (int, float, bool, str)) and output_shape[-1] == 1:
-                result[idx] = output
-            else:
-                result[idx] = np.array(output)
         
         return result
 
