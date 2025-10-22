@@ -56,7 +56,327 @@ def collect_manifest(
     df["status"] = np.where(df["data_exists"], "ok", "missing_data")
     return df
 
-@dataclass
+class SweepSet:
+    def __init__(self, data_dir: str | Path, sweep_config: Dict[str, Any]):
+        """
+        Initialize SweepSet with a sweep configuration.
+        
+        Args:
+            data_dir: Directory containing the generated data and YAML files
+            sweep_config: The same sweep config used to generate the files
+        """
+        self.data_dir = Path(data_dir)
+        self.sweep_config = sweep_config
+        
+        # Extract sweep parameters
+        self.sweeps = sweep_config.get("sweeps", {})
+        self.mode = sweep_config.get("mode", "cartesian")
+        self.repetitions = sweep_config.get("repetitions", 1)
+        
+        # Collect manifest
+        self.manifest = collect_manifest(self.data_dir)
+        
+        # Extract timestamp from filenames and add to manifest
+        self.manifest['timestamp'] = self.manifest['yaml_path'].apply(
+            lambda path: self._extract_timestamp(Path(path).stem) if pd.notna(path) else None
+        )
+        
+        # Extract parameter values from YAML files
+        self.param_names = list(self.sweeps.keys())
+        for param_name in self.param_names:
+            self.manifest[param_name] = self.manifest['yaml_path'].apply(
+                lambda path: self._extract_param(path, param_name) if pd.notna(path) else None
+            )
+        
+        # Generate expected sweep structure
+        self._generate_sweep_structure()
+        
+        # Load and organize data
+        self._data = None
+        self._yaml_configs = None
+    
+    def _extract_timestamp(self, filename: str) -> str:
+        """Extract timestamp from filename."""
+        import re
+        match = re.search(r'(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})', filename)
+        return match.group(1) if match else ""
+    
+    def _extract_param(self, yaml_path, param_name):
+        """Extract parameter value from YAML file."""
+        try:
+            config = load_yaml(yaml_path)
+            return get_by_dotted_path(config, param_name)
+        except:
+            return None
+    
+    def _generate_sweep_structure(self):
+        """Generate the expected parameter combinations based on sweep_config."""
+        param_values = [self.sweeps[name] for name in self.param_names]
+        
+        if self.mode == "cartesian":
+            from itertools import product
+            self.combinations = list(product(*param_values))
+            self.shape = tuple(len(v) for v in param_values) + (self.repetitions,)
+        elif self.mode == "zip":
+            self.combinations = list(zip(*param_values))
+            self.shape = (len(self.combinations), self.repetitions)
+        
+    def load_data(self) -> np.ndarray:
+        """
+        Load all data files and organize them according to sweep structure.
+        
+        Returns:
+            Array with shape matching the sweep structure plus data dimensions.
+            For cartesian: (dim1, dim2, ..., dimN, repetitions, *data_shape)
+            For zip: (n_combinations, repetitions, *data_shape)
+        """
+        if self._data is not None:
+            return self._data
+        
+        # Find first data file to get shape
+        first_data = None
+        for _, row in self.manifest.iterrows():
+            if row['data_exists']:
+                first_data = np.load(row['data_path'])
+                break
+                
+        if first_data is None:
+            raise ValueError("No data files found")
+            
+        data_shape = first_data.shape
+        full_shape = self.shape + data_shape
+        
+        # Initialize arrays
+        self._data = np.full(full_shape, np.nan, dtype=first_data.dtype)
+        self._yaml_configs = np.empty(self.shape, dtype=object)
+        
+        # Group by parameter combinations and sort by timestamp
+        if self.param_names:
+            grouped = self.manifest.groupby(self.param_names)
+            
+            # Process each parameter combination
+            for param_values, group in grouped:
+                # Make sure param_values is a tuple
+                if not isinstance(param_values, tuple):
+                    param_values = (param_values,)
+                
+                # Get index in the array
+                if self.mode == "cartesian":
+                    try:
+                        idx = tuple(self.sweeps[name].index(val) 
+                                    for name, val in zip(self.param_names, param_values))
+                    except ValueError:
+                        # Parameter value not in expected values
+                        continue
+                else:  # zip mode
+                    try:
+                        idx = tuple()
+                        for i, combo in enumerate(self.combinations):
+                            if combo == param_values:
+                                idx = (i,)
+                                break
+                        if not idx:
+                            continue
+                    except:
+                        continue
+                
+                # Sort by timestamp and assign to repetition slots
+                sorted_group = group.sort_values('timestamp')
+                for rep_idx, (_, row) in enumerate(sorted_group.iterrows()):
+                    if rep_idx >= self.repetitions:
+                        break
+                        
+                    if row['data_exists']:
+                        full_idx = idx + (rep_idx,)
+                        self._data[full_idx] = np.load(row['data_path'])
+                        self._yaml_configs[full_idx] = row['yaml_path']
+        
+        return self._data
+    
+    def get_sweep_keys(self) -> Dict[str, np.ndarray]:
+        """
+        Get the sweep parameter values organized by dimension.
+        
+        Returns:
+            Dictionary mapping parameter names to their values along each axis.
+        """
+        sweep_keys = {}
+        
+        if self.mode == "cartesian":
+            for param_name in self.param_names:
+                sweep_keys[param_name] = np.array(self.sweeps[param_name])
+        else:  # zip mode
+            for param_name in self.param_names:
+                sweep_keys[param_name] = np.array(self.sweeps[param_name])
+        
+        return sweep_keys
+    
+    def get_yaml_path(self, *indices) -> str:
+        """
+        Get the YAML config path for a specific set of indices.
+        
+        Args:
+            *indices: Indices matching the data array structure
+            
+        Returns:
+            Path to the YAML config file
+        """
+        if self._yaml_configs is None:
+            self.load_data()
+        
+        return self._yaml_configs[indices]
+    
+    def get_yaml_config(self, *indices) -> str:
+        """
+        Get the YAML config path for a specific set of indices.
+        
+        Args:
+            *indices: Indices matching the data array structure
+            
+        Returns:
+            Path to the YAML config file
+        """
+        yaml_path = self.get_yaml_path(*indices)
+        return load_yaml(yaml_path)
+    
+    def get_parameter_grid(self) -> np.ndarray:
+        """
+        Generate a structured array containing parameter values at each index position.
+        
+        Returns:
+            Array with shape (*sweep_shape, num_params) containing parameter values.
+            The last dimension corresponds to parameters in the order of self.param_names.
+            
+        Example:
+            For cartesian product with N=[14,16] and freq=[2.1e9,2.2e9] with 2 repetitions:
+            The result will have shape (2, 2, 2, 2) where:
+            result[0,0,0] = [14, 2.1e9]
+            result[0,0,1] = [14, 2.1e9]
+            result[0,1,0] = [14, 2.2e9]
+            ...and so on
+        """
+        # Get number of parameters
+        n_params = len(self.param_names)
+        
+        # Create output array with an extra dimension for parameters
+        # Try to determine if we can use a specific dtype
+        try:
+            # Check if all parameter values are numeric
+            all_values = []
+            for values in self.sweeps.values():
+                all_values.extend(values)
+            
+            # Try float64 as the common dtype
+            sample = np.array(all_values, dtype=np.float64)
+            dtype = np.float64
+        except:
+            # Fall back to object dtype if parameters are mixed
+            dtype = object
+        
+        # Create output array
+        param_grid = np.empty(self.shape + (n_params,), dtype=dtype)
+        
+        # Fill the grid based on mode
+        if self.mode == "cartesian":
+            # For each position in the grid
+            for idx in np.ndindex(self.shape[:-1]):  # Excluding repetition dimension
+                # Create array of parameter values
+                param_values = np.array([
+                    self.sweeps[param_name][idx[dim_idx]]
+                    for dim_idx, param_name in enumerate(self.param_names)
+                ], dtype=dtype)
+                    
+                # Assign to all repetitions
+                for rep in range(self.repetitions):
+                    full_idx = idx + (rep,)
+                    param_grid[full_idx] = param_values
+                    
+        elif self.mode == "zip":
+            # For each combination
+            for combo_idx, combo in enumerate(self.combinations):
+                # Convert combo to numpy array
+                param_values = np.array(combo, dtype=dtype)
+                
+                # Assign to all repetitions
+                for rep in range(self.repetitions):
+                    param_grid[combo_idx, rep] = param_values
+        
+        return param_grid
+
+
+    def get_yaml_configs_array(self) -> np.ndarray:
+        """
+        Get the full array of YAML config paths matching the data structure.
+        
+        Returns:
+            Array of shape matching sweep structure (without data dimensions)
+        """
+        if self._yaml_configs is None:
+            self.load_data()
+        
+        return self._yaml_configs
+    
+
+    def query(self, keys: List[str], values: List[Any]) -> np.ndarray:
+        """
+        Query the data array for entries matching specific parameter values.
+        
+        Args:
+            keys: List of parameter names to match (e.g., ["pulse_sequence.N", "pulse_sequence.awg_frequency"])
+            values: List of corresponding values to filter by (e.g., [16, 2.1909e9])
+        
+        Returns:
+            Numpy array with all data entries matching the specified parameter values
+        """
+        # Ensure data is loaded
+        if self._data is None:
+            self.load_data()
+            
+        # Validate keys
+        for key in keys:
+            if key not in self.param_names:
+                raise ValueError(f"Parameter '{key}' not found in sweep configuration")
+        
+        # Get parameter indices in param_names list
+        param_indices = [self.param_names.index(key) for key in keys]
+        
+        # Get parameter grid
+        param_grid = self.get_parameter_grid()
+        
+        # Create mask for matching entries
+        mask = np.ones(self.shape, dtype=bool)
+        
+        # Apply filters for each key-value pair
+        for i, (param_idx, value) in enumerate(zip(param_indices, values)):
+            # Check each position if its parameter value matches
+            param_mask = param_grid[..., param_idx] == value
+            mask = mask & param_mask
+        
+        # Get indices of matches
+        match_indices = np.where(mask)
+        
+        # Extract data at matching indices
+        if len(match_indices[0]) == 0:
+            return np.array([])  # No matches
+        
+        # Gather matching data
+        result = np.array([self._data[idx] for idx in zip(*match_indices)])
+        
+        # Reshape result based on number of dimensions in data
+        data_shape = self._data.shape[len(self.shape):]  # Get shape of data part
+        result_shape = (len(match_indices[0]),) + data_shape
+        
+        return result.reshape(result_shape)
+
+    @property
+    def data(self) -> np.ndarray:
+        """Access the loaded data array."""
+        if self._data is None:
+            self.load_data()
+        return self._data
+
+
+"""@dataclass
 class SweepSet:
     manifest: pd.DataFrame
 
@@ -168,7 +488,7 @@ class SweepSet:
             if len(vals) == len(self):
                 coords[col] = ("run", vals)
         da = xr.DataArray(data, dims=("run", "time"), coords=coords, name="signal")
-        return da
+        return da"""
     
 
 
