@@ -7,9 +7,9 @@ import evaluation_package.casr as casr
 import evaluation_package.evaluation as ev
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union, Callable
 import matplotlib.pyplot as plt
-
+import inspect
 import numpy as np
 import pandas as pd
 
@@ -367,6 +367,114 @@ class SweepSet:
         result_shape = (len(match_indices[0]),) + data_shape
         
         return result.reshape(result_shape)
+
+
+    def process_data(self, func: Callable, **kwargs) -> np.ndarray:
+        """
+        Apply a processing function to each data point in the sweep.
+        
+        Args:
+            func: Function to process data. Supported signatures:
+                - func(data, **kwargs)
+                - func(data, yaml_config, **kwargs)
+                - func(data, params, **kwargs)
+                - func(data, yaml_config, params, **kwargs)
+                - func(yaml_config, **kwargs)  # For config-only processing
+            **kwargs: Additional keyword arguments passed to func
+        
+        Returns:
+            Array with same shape as data array except the data dimensions are 
+            replaced with the shape of the function output
+        """
+        
+        # Ensure data is loaded
+        if self._data is None:
+            self.load_data()
+        
+        # Inspect function signature to determine needed arguments
+        sig = inspect.signature(func)
+        param_names = list(sig.parameters.keys())
+        
+        # Check what the function needs
+        needs_data = 'data' in param_names
+        needs_yaml = 'yaml_config' in param_names
+        needs_params = 'params' in param_names
+        
+        # Get parameter grid if needed
+        param_grid = self.get_parameter_grid() if needs_params else None
+        
+        # Process first non-nan item to determine output shape
+        sample_idx = None
+        for idx in np.ndindex(self.shape):
+            if not np.isnan(self._data[idx]).all():
+                sample_idx = idx
+                break
+                
+        if sample_idx is None:
+            raise ValueError("All data points are NaN")
+        
+        # Build argument dictionary for sample execution
+        sample_args = {}
+        if needs_data:
+            sample_args['data'] = self._data[sample_idx]
+        if needs_yaml:
+            sample_args['yaml_config'] = self.get_yaml_config(*sample_idx)
+        if needs_params:
+            sample_args['params'] = param_grid[sample_idx] if param_grid is not None else None
+        sample_args.update(kwargs)
+        
+        # Execute function on sample to determine output shape
+        sample_output = func(**sample_args)
+        
+        # Determine output shape
+        if isinstance(sample_output, (int, float, bool, str)):
+            output_shape = self.shape + (1,)
+            output_dtype = type(sample_output)
+        elif isinstance(sample_output, np.ndarray):
+            output_shape = self.shape + sample_output.shape
+            output_dtype = sample_output.dtype
+        else:
+            try:
+                sample_output = np.array(sample_output)
+                output_shape = self.shape + sample_output.shape
+                output_dtype = sample_output.dtype
+            except:
+                output_shape = self.shape + (1,)
+                output_dtype = object
+        
+        # Create output array
+        result = np.empty(output_shape, dtype=output_dtype)
+        
+        # Process all data
+        for idx in np.ndindex(self.shape):
+            # Build argument dictionary
+            args = {}
+            if needs_data:
+                args['data'] = self._data[idx]
+            if needs_yaml:
+                args['yaml_config'] = self.get_yaml_config(*idx)
+            if needs_params:
+                args['params'] = param_grid[idx] if param_grid is not None else None
+            args.update(kwargs)
+            
+            # Skip if needed data is NaN
+            if needs_data and isinstance(args['data'], np.ndarray) and np.isnan(args['data']).all():
+                if isinstance(sample_output, np.ndarray):
+                    result[idx] = np.full(sample_output.shape, np.nan)
+                else:
+                    result[idx] = np.nan
+                continue
+            
+            # Apply function
+            output = func(**args)
+            
+            # Store result
+            if isinstance(output, (int, float, bool, str)) and output_shape[-1] == 1:
+                result[idx] = output
+            else:
+                result[idx] = np.array(output)
+        
+        return result
 
     @property
     def data(self) -> np.ndarray:

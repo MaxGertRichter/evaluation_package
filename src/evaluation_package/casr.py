@@ -24,7 +24,7 @@ def calc_contrast(data: np.ndarray) -> np.ndarray:
     mess = data[1]
     return np.squeeze((mess - ref) / (mess + ref))
 
-def calc_fourier_frequencies(cfg: dict) -> np.ndarray:
+def calc_fourier_frequencies(yaml_config: dict) -> np.ndarray:
     """Calculates the fourier frequencies spacing for the CASR experiment.
 
     Parameters
@@ -39,8 +39,8 @@ def calc_fourier_frequencies(cfg: dict) -> np.ndarray:
     """
     # this needs to be implemented in the other cases also
     #adjusted_samples = calc_adjusted_samples(cfg)
-    sensing_time = cfg["duration_puseseq_cycle"] * 1e-6
-    samples = cfg["pulse_sequence"]["n_meas"] // 2
+    sensing_time = yaml_config["duration_puseseq_cycle"] * 1e-6
+    samples = yaml_config["pulse_sequence"]["n_meas"] // 2
     # old number of samples
     return np.fft.rfftfreq(samples, d=sensing_time)
 
