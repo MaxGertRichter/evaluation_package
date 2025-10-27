@@ -3,54 +3,12 @@ import numpy as np
 from scipy import constants
 from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter, find_peaks, peak_widths
+from evaluation_package import utils as ut
 
 
 #-----------General CASR functions----------------
 
-def calc_contrast(data: np.ndarray) -> np.ndarray:
-    """Calculates the contrast from the reference and measurement data for the CASR experiment.
-
-    Parameters
-    ----------
-    data : np.ndarray
-        the data array from the experiment the first index is the measurement the second is the reference
-
-    Returns
-    -------
-    np.ndarray
-        The contrast array
-    """
-    ref = data[0]
-    mess = data[1]
-    return np.squeeze((mess - ref) / (mess + ref))
-
-def calc_fourier_frequencies(cfg: dict) -> np.ndarray:
-    """Calculates the fourier frequencies spacing for the CASR experiment.
-
-    Parameters
-    ----------
-    cfg : dict
-        The configuration yaml_file to configrue the experiment.
-
-    Returns
-    -------
-    np.ndarray
-        The fourier frequency axis
-    """
-    # this needs to be implemented in the other cases also
-    #adjusted_samples = calc_adjusted_samples(cfg)
-    sensing_time = cfg["duration_puseseq_cycle"] * 1e-6
-    samples = cfg["pulse_sequence"]["n_meas"] // 2
-    # old number of samples
-    return np.fft.rfftfreq(samples, d=sensing_time)
-
-def calc_fourier_transform(data: np.ndarray) -> np.ndarray:
-    final = np.squeeze(calc_contrast(data)) # maybe move the squeeze some where else in the future
-    fft_final = np.abs(np.fft.rfft(final, norm ="ortho"))
-    return fft_final
-
-
-def calc_calibration_freqeuncy(yaml_config: dict) -> float:
+def calc_calibration_frequency(yaml_config: dict) -> float:
     """Calculate the calibration frequency based on the pulse sequence parameters.
 
     Args:
@@ -64,6 +22,7 @@ def calc_calibration_freqeuncy(yaml_config: dict) -> float:
     sensing_freq = 1 / (4 * tau)
     calibration_freq = np.abs(rf_freq - sensing_freq)
     return calibration_freq
+
 
 def calc_adjusted_samples(yaml_config: dict) -> tuple[int, float]:
     """Calculates the adjusted number of measurements for a CASR meausrement to fit a integer 
@@ -79,8 +38,8 @@ def calc_adjusted_samples(yaml_config: dict) -> tuple[int, float]:
     tuple[int, float]
         The adjusted number of samples and the number of calibration periodes that fit in the measurement block.
     """
-    frequency = calc_calibration_freqeuncy(yaml_config)
-    delta_t = yaml_config["duration_puseseq_cycle"] * 1e-6  # Convert microseconds to seconds
+    frequency = calc_calibration_frequency(yaml_config)
+    delta_t = pulse_sequence_duration(yaml_config)  # Convert microseconds to seconds
     N_initial = yaml_config["pulse_sequence"]["n_meas"] // 2  # Initial number of samples (half of n_meas)
     period = 1 / frequency
     
@@ -96,181 +55,77 @@ def calc_adjusted_samples(yaml_config: dict) -> tuple[int, float]:
     return adjusted_N_initial, N_cycles
 
 
-#-----------CASR calibration functions-----------------
 
-def calc_b_ac(yaml_config: dict) -> float:
-    """Calculates the magnetic field strength b_ac for the CASR calibration, 
-    where the phase accumulation is 2pi.
+def calc_fourier_frequencies(yaml_config: dict) -> np.ndarray:
+    """Calculates the fourier frequencies spacing for the CASR experiment.
 
     Parameters
     ----------
-    yaml_config : dict
+    cfg : dict
         The configuration yaml_file to configrue the experiment.
+
+    Returns
+    -------
+    np.ndarray
+        The fourier frequency axis
     """
-    f_rf = yaml_config['dynamic_devices']['rf_source']['config']['frequency'][0]
-    N = yaml_config['pulse_sequence']['N'] * 8 # assuming it is a XY8 block
-    g_e = constants.physical_constants['electron g factor'][0] *-1
-    mu_B = constants.physical_constants['Bohr magneton'][0]
-    hbar = constants.hbar
-    b_ac = 2 * np.pi**2 * hbar * f_rf /(g_e * mu_B * N)
+    # this needs to be implemented in the other cases also
+    adjusted_samples = calc_adjusted_samples(yaml_config)[0]
+    dt = pulse_sequence_duration(yaml_config)
+    #samples = yaml_config["pulse_sequence"]["n_meas"] // 2
+    # old number of samples
+    return np.fft.rfftfreq(adjusted_samples, d=dt)
 
-    return b_ac
-
-def calc_Vpp_list(yaml_config: dict) -> np.ndarray:
-    """Calculate the voltage Vpp spacing for the CASR calibration experiment
+def calc_fourier_transform(yaml_config: dict, data: np.ndarray) -> np.ndarray:
+    """Calculates the fourier transform of the CASR contrast signal.
+    This function uses the adjusted sample length to calculate the fourier transform.
 
     Parameters
     ----------
     yaml_config : dict
-        Configuration file of the experiment.
-
-    Returns
-    -------
-    v_axis : np.ndarray
-        The voltage axis for the CASR calibration experiment.
-    """
-    v_min = yaml_config['dynamic_devices']['rf_source']['config']['amplitude'][0]
-    v_max = yaml_config['dynamic_devices']['rf_source']['config']['amplitude'][1]
-    v_steps = yaml_config['dynamic_steps']
-    v_axis = np.linspace(v_min, v_max, v_steps)
-    return v_axis
-
-def _odd_bounded(n, w):
-    # make w an odd integer in [3, n-1]
-    w = int(w)
-    if w % 2 == 0: w += 1
-    w = max(3, min(w, n-1 if (n-1)%2 else n-2))
-    return w
-
-def find_special_dips(
-    y, slow_win=10, slow_poly=2, search_win=5, 
-    peak_prom=None, peak_dist=None, return_baseline=False
-):
-    """
-    Find 'notches' (downward dips) near each *major* maximum and minimum
-    of the underlying big oscillation.
-
-    y : 1D array
-    slow_win, slow_poly : Savitzky-Golay smoothing for the big oscillation
-    search_win : half-window (in samples) to search around each slow extremum
-    peak_prom, peak_dist : passed to find_peaks on the *slow* curve to keep only
-                           real maxima/minima of the big oscillation
-    return_baseline : if True, also return the smoothed baseline y_slow
-
-    Returns dict with indices:
-      - dips_near_max   : notch indices near each slow maximum
-      - dips_near_min   : notch indices near each slow minimum
-      - slow_maxima/minima : indices of the slow extrema (for reference)
-    """
-    y = np.asarray(y, float)
-    n = len(y)
-    if n < 7:
-        raise ValueError("Trace too short.")
-
-    # 1) slow baseline of the big oscillation
-    slow_win = _odd_bounded(n, slow_win)
-    y_slow = savgol_filter(y, window_length=slow_win, polyorder=slow_poly)
-
-    # 2) slow maxima & minima (the big oscillation)
-    slow_max, _ = find_peaks( y_slow, prominence=peak_prom, distance=peak_dist)
-    slow_min, _ = find_peaks(-y_slow, prominence=peak_prom, distance=peak_dist)
-
-    # 3) residual (notch stands out as negative)
-    r = y - y_slow
-
-    def best_dip_around(idx: int) -> int:
-        L = max(0, idx - search_win)
-        R = min(n-1, idx + search_win)
-        # choose the *most negative residual* in the neighborhood
-        k = L + int(np.argmin(r[L:R+1]))
-        return k
-
-    dips_near_max = np.array([best_dip_around(i) for i in slow_max], dtype=int)
-    dips_near_min = np.array([best_dip_around(i) for i in slow_min], dtype=int)
-
-    out = dict(
-        dips_near_max=dips_near_max,
-        dips_near_min=dips_near_min,
-        slow_maxima=slow_max,
-        slow_minima=slow_min,
-    )
-    if return_baseline:
-        out["baseline"] = y_slow
-    return out
-
-def find_backfolding_index(contrast: np.ndarray) -> int:
-    """Calculates the index where the backfolding during the CASR calibration happens
-
-    Parameters
-    ----------
-    contrast : np.ndarray
-        the constrast array of the CASR calibration
-
-    Returns
-    -------
-    backfold_id : int
-        The index of a minima in a backfolding maxima
-    """
-    summed_contrast = np.sum(contrast, axis=0)
-    dict_minmax = find_special_dips(summed_contrast)
-    backfold_id = dict_minmax["slow_minima"][1]
-    return backfold_id
-
-
-def b_sine(x, V, O, A, ϕ):
-    # fitting fucntion for the CASR calibration
-    # V is the voltage periode
-    # A is the amplitude
-    # O is the offset
-    return O + A * np.sin(2*np.pi * x / V + ϕ)
-
-
-
-def plot_casr_clibration(yaml_config: dict, data: np.ndarray) -> None:
-    """Plots the CASR calibration and fits a sine to the backfolding maxima. Prints the voltage needed to generate a 10 nT signal.
-
-    Parameters
-    ----------
-    yaml_config : dict
-        Configuration file of the experiment.
+        The configuration yaml_file to configrue the CASR experiment.
     data : np.ndarray
-        The measurment data array of the CASR calibration.
-    """
-    contrast = calc_contrast(data)
-    backfold_id = find_backfolding_index(contrast)
-    maximas_backfolding = contrast[:, backfold_id]
-    v_axis = calc_Vpp_list(yaml_config)
-    opt, _ = curve_fit(b_sine, v_axis, maximas_backfolding, p0=[v_axis[-1], 0, max(maximas_backfolding), 0])
-    b_ac = calc_b_ac(yaml_config)
-    C = b_ac/opt[0]
-    V_for_10_nT = 10e-9 / C
-    print(f'You need {V_for_10_nT:.4f} V to generate a 10 nT Signal')
-    plt.plot(v_axis, maximas_backfolding, label="Data")
-    plt.plot(v_axis, b_sine(v_axis, *opt), label=f'b_ac = {b_ac:.2e} T\nb/V = {b_ac/opt[0]:.2e} T/V')
-    plt.legend()
-    plt.xlabel("Vpp (V)")
+        The measurement data array of the CASR experiment.
+        
 
-def check_backfolding_index(contrast: np.ndarray) -> None:
-    """Checks id the index for the backfolding is in the middle of the peak
+    Returns
+    -------
+    np.ndarray
+        The fourier transformed contrast signal.
+    """
+    # check that an integer number of oscillations fit into the window for maximal sensitivity
+    adjusted_samples = calc_adjusted_samples(yaml_config)[0]
+    contrast = ut.contrast(data)[:adjusted_samples] # maybe move the squeeze some where else in the future
+    fft_final = np.abs(np.fft.rfft(contrast, norm ="ortho"))
+    return fft_final
+
+def pulse_sequence_duration(yaml_config: dict) -> float:
+    """Calculates the total duration of the pulse sequence cycle.
 
     Parameters
     ----------
-    contrast : np.ndarray
-        contrast array of the CASR calibration
+    yaml_config : dict
+        The configuration yaml_file to configrue the CASR experiment.
+
+    Returns
+    -------
+    float
+        The total duration of the pulse sequence cycle in seconds.
     """
-    backfold_id = find_backfolding_index(contrast)
-    print(f"The backfolding index is {backfold_id}")
-    for i in range(len(contrast)):
-        plt.plot(contrast[i])
-        plt.plot(backfold_id, contrast[i,backfold_id], 'ro')
+    if "duration_pulseseq_cycle" in yaml_config:
+        return yaml_config["duration_pulseseq_cycle"] * 1e-6
+    elif "duration_puseseq_cycle" in yaml_config:
+        return yaml_config["duration_puseseq_cycle"] * 1e-6
+    else:
+        raise KeyError("Duration of pulse sequence cycle not found in configuration.")
 
 
 #-----------Sensitivity calculation functions-----------------
 
 def calc_measurement_time(yaml_config: dict) -> float:
-    pulse_sequence_duration = yaml_config["duration_puseseq_cycle"] * 1e-6 # in seconds
+    ps_duration = pulse_sequence_duration(yaml_config) # in seconds
     n_meas = yaml_config["sensor"]["config"]["number_measurements"]//2
-    measurement_time = pulse_sequence_duration * n_meas # this must be divided by two???
+    measurement_time = ps_duration * n_meas # this must be divided by two???
     return measurement_time
 
 def find_peak_near(x, y, f0, window_hz=None, window_bins=5):
@@ -438,7 +293,7 @@ def noise_only_mask(
     return mask, peaks_info
 
 
-def calc_sensitivity(yaml_config: dict, data: np.ndarray, f0:float = 500, **kwargs)-> tuple[float, float, float]:
+def calc_sensitivity(yaml_config: dict, data: np.ndarray, **kwargs)-> tuple[float, float, float]:
     """Calculates the sensitivity and SNR of a singleshot CASR measurement.
 
     Parameters
@@ -461,11 +316,11 @@ def calc_sensitivity(yaml_config: dict, data: np.ndarray, f0:float = 500, **kwar
     window_hz = kwargs.get("window_hz", None)
     width_hz = kwargs.get("width_hz", 1)
     window_bins = kwargs.get("window_bins", 5)
-
+    f0 = calc_calibration_frequency(yaml_config)
     
 
     frequencies = calc_fourier_frequencies(yaml_config)[mask_index:]
-    fft_spectrum = calc_fourier_transform(data)[mask_index:]
+    fft_spectrum = calc_fourier_transform(yaml_config, data)[mask_index:]
     idx, freq, amp = find_peak_near(frequencies, fft_spectrum, f0, window_hz=window_hz, window_bins=window_bins)
     measurement_time = calc_measurement_time(yaml_config)
     # rescale the amplitude

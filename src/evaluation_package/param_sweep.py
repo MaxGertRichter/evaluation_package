@@ -83,14 +83,17 @@ def _sort_combos(combos: List[Dict[str, Any]], order_by: Optional[List[str]]) ->
 def generate_sweeps(
     base_yaml: Path,
     out_dir: Path,
-    sweeps: Dict[str, List[Any]],
-    mode: str = "cartesian",
+    sweep_config: Dict[str, Any],
     prefix_index: bool = True,
     start_index: int = 1,
     pad_width: Optional[int] = None,
-    order_by: Optional[List[str]] = None,
-    repetitions: int = 1
+    order_by: Optional[List[str]] = None
 ):
+    # Extract parameters from sweep_config
+    sweeps = sweep_config.get("sweeps", {})
+    mode = sweep_config.get("mode", "cartesian")
+    repetitions = sweep_config.get("repetitions", 1)
+    
     out_dir.mkdir(parents=True, exist_ok=True)
     base_stem = base_yaml.stem
 
