@@ -23,33 +23,6 @@ def esr_frequencies(yaml_config: dict) -> np.ndarray:
     return esr_freq
 
 
-def esr_contrast(data: np.ndarray) -> np.ndarray:
-    """
-    Computes the y-values of the ESR (Electron Spin Resonance) spectrum.
-
-    This function takes a 2D numpy array where the first element represents 
-    the reference ESR spectrum and the second element represents the measured 
-    ESR spectrum. It calculates the ratio of the measured spectrum to the 
-    reference spectrum to obtain the y-values of the ESR spectrum.
-
-    Parameters:
-    -----------
-    data : np.ndarray
-        A 2D numpy array where:
-        - data[0] is the reference ESR spectrum (1D array).
-        - data[1] is the measured ESR spectrum (1D array).
-
-    Returns:
-    --------
-    np.ndarray
-        A 1D numpy array containing the y-values of the ESR spectrum.
-    """
-    ref_ESR = data[0].flatten()
-    meas_ESR = data[1].flatten()
-    esr_contrast = meas_ESR/ref_ESR
-    return esr_contrast
-
-
 def get_min_peaks(x, y, **kwargs):
     defaults = {
         "window_length": 21,

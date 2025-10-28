@@ -95,7 +95,7 @@ def calc_fourier_transform(yaml_config: dict, data: np.ndarray) -> np.ndarray:
     """
     # check that an integer number of oscillations fit into the window for maximal sensitivity
     adjusted_samples = calc_adjusted_samples(yaml_config)[0]
-    contrast = ut.contrast(data)[:adjusted_samples] # maybe move the squeeze some where else in the future
+    contrast = ut.contrast(data)[:adjusted_samples] 
     fft_final = np.abs(np.fft.rfft(contrast, norm ="ortho"))
     return fft_final
 
