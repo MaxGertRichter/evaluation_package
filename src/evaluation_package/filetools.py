@@ -71,7 +71,7 @@ def get_datafolder_home()-> str:
         OSError: If the operating system is not Windows or macOS.
     """
     if platform.system() == "Windows":
-        directory = r"G:\Bucherlab\Sensitivity_Optimization"
+        directory = r"Z:\Table Top Julia\Experiment\QupytMessungen\2025-10-28 FirstQupytMeasurements"
     elif platform.system() == "Darwin":  # macOS
         directory = "/System/Volumes/Data/mnt/lab_cloud/Bucherlab/Sensitivity_Optimization"
     else:
