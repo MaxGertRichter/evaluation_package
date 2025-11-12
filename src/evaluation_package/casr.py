@@ -3,6 +3,7 @@ import numpy as np
 from scipy import constants
 from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter, find_peaks, peak_widths
+from scipy.fft import fft, rfft, fftfreq, rfftfreq
 from evaluation_package import utils as ut
 
 
@@ -74,10 +75,10 @@ def calc_fourier_frequencies(yaml_config: dict) -> np.ndarray:
     dt = pulse_sequence_duration(yaml_config)
     #samples = yaml_config["pulse_sequence"]["n_meas"] // 2
     # old number of samples
-    return np.fft.rfftfreq(adjusted_samples, d=dt)
+    return rfftfreq(adjusted_samples, d=dt)
 
-def calc_fourier_transform(yaml_config: dict, data: np.ndarray) -> np.ndarray:
-    """Calculates the fourier transform of the CASR contrast signal.
+def calc_fourier_transform(yaml_config: dict, data: np.ndarray, values = "abs") -> np.ndarray:
+    """Calculates the fourier transform magnitude or complex values of the CASR contrast signal.
     This function uses the adjusted sample length to calculate the fourier transform.
 
     Parameters
@@ -96,7 +97,11 @@ def calc_fourier_transform(yaml_config: dict, data: np.ndarray) -> np.ndarray:
     # check that an integer number of oscillations fit into the window for maximal sensitivity
     adjusted_samples = calc_adjusted_samples(yaml_config)[0]
     contrast = ut.contrast(data)[:adjusted_samples] 
-    fft_final = np.abs(np.fft.rfft(contrast, norm ="ortho"))
+
+    if values == "abs":
+        fft_final = np.abs(rfft(contrast, norm ="forward"))
+    elif values == "complex":
+        fft_final = rfft(contrast, norm ="forward")
     return fft_final
 
 def pulse_sequence_duration(yaml_config: dict) -> float:
@@ -310,25 +315,24 @@ def calc_sensitivity(yaml_config: dict, data: np.ndarray, **kwargs)-> tuple[floa
     tuple[float, float, float]
         sensitivity in T/√Hz and normalized SNR and std of the noise
     """
-    prominence = kwargs.get("prominence", 0.005)
+    prominence = kwargs.get("prominence", 0.0001)
     rel_pad = kwargs.get("rel_pad", 10)
     mask_index = kwargs.get("mask_index", 20)
-    window_hz = kwargs.get("window_hz", None)
+    window_hz = kwargs.get("window_hz", 50)
     width_hz = kwargs.get("width_hz", 1)
     window_bins = kwargs.get("window_bins", 5)
     f0 = calc_calibration_frequency(yaml_config)
     
 
     frequencies = calc_fourier_frequencies(yaml_config)[mask_index:]
-    fft_spectrum = calc_fourier_transform(yaml_config, data)[mask_index:]
-    idx, freq, amp = find_peak_near(frequencies, fft_spectrum, f0, window_hz=window_hz, window_bins=window_bins)
+    fft_spectrum_abs = calc_fourier_transform(yaml_config, data)[mask_index:]
+    idx, freq, amp = find_peak_near(frequencies, fft_spectrum_abs, f0, window_hz=window_hz, window_bins=window_bins)
     measurement_time = calc_measurement_time(yaml_config)
-    # rescale the amplitude
-    fft_spectrum_normalized = fft_spectrum/amp
-
-    noise_mask, peak_info = noise_only_mask(frequencies, fft_spectrum, prominence=prominence, rel_pad=rel_pad, width_hz=width_hz)
-    std = np.std(fft_spectrum_normalized[noise_mask])
-    snr = 1/std
+    #calculate noise std
+    noise_mask, peak_info = noise_only_mask(frequencies, fft_spectrum_abs, prominence=prominence, rel_pad=rel_pad, width_hz=width_hz)
+    noise_floor = ut.rms(fft_spectrum_abs[noise_mask])
+    snr = amp/noise_floor
+    #calculate sensitivity
     sensitivity = 10e-9 /snr * np.sqrt(measurement_time) # in T/√Hz
 
-    return sensitivity, snr, std
+    return sensitivity, snr, noise_floor
