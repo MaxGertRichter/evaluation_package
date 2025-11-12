@@ -81,3 +81,15 @@ def contrast(data: np.ndarray, experiment_type = None) -> np.ndarray:
         contrast = np.squeeze((mess - ref) / (mess + ref))
     
     return contrast
+
+
+def rms(arr: np.ndarray) -> float:
+    """Calculate the root mean square (RMS) of a NumPy array.
+
+    Args:
+        arr (np.ndarray): Input array for which to calculate the RMS.
+
+    Returns:
+        float: The RMS value of the input array.
+    """
+    return np.sqrt(np.mean(np.square(np.abs(arr))))
