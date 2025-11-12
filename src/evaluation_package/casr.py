@@ -328,7 +328,6 @@ def calc_sensitivity(yaml_config: dict, data: np.ndarray, **kwargs)-> tuple[floa
     fft_spectrum_abs = calc_fourier_transform(yaml_config, data)[mask_index:]
     idx, freq, amp = find_peak_near(frequencies, fft_spectrum_abs, f0, window_hz=window_hz, window_bins=window_bins)
     measurement_time = calc_measurement_time(yaml_config)
-    print("new version of sensitivity calculation")
     #calculate noise std
     noise_mask, peak_info = noise_only_mask(frequencies, fft_spectrum_abs, prominence=prominence, rel_pad=rel_pad, width_hz=width_hz)
     noise_floor = ut.rms(fft_spectrum_abs[noise_mask])
