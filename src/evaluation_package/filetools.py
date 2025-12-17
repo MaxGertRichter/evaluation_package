@@ -42,15 +42,18 @@ def get_data_file(path: str, experiment_type: str, extension: str, date_key: str
         raise FileNotFoundError(f"No files found in '{path}' matching prefix '{prefix}' and extension '{ext}'.")
 
     if date_key is not None:
-        target = f"{prefix}{date_key}{ext}"
-        if target in candidates:
-            return target
+        target_suffix = f"{date_key}{ext}"
+        matches = [c for c in candidates if c.endswith(target_suffix)]
+        target = f"*{target_suffix}"
+        if matches:
+            return matches[0]
         else:
             available = ", ".join(sorted(candidates))
             raise FileNotFoundError(f"Requested file '{target}' not found. Available files: {available}")
 
     def parse_ts(fname: str) -> datetime:
-        ts = fname[len(prefix):-len(ext)]
+        len_ts = len("YYYY-MM-DD-HH-MM-SS")
+        ts = fname[-len_ts-len(ext):-len(ext)]
         try:
             return datetime.strptime(ts, "%Y-%m-%d-%H-%M-%S")
         except ValueError as e:
@@ -73,7 +76,8 @@ def get_datafolder_home()-> str:
     if platform.system() == "Windows":
         directory = r"G:\Bucherlab\Sensitivity_Optimization"
     elif platform.system() == "Darwin":  # macOS
-        directory = "/System/Volumes/Data/mnt/lab_cloud/Bucherlab/Sensitivity_Optimization"
+        #directory = "/System/Volumes/Data/mnt/lab_cloud/Bucherlab/Sensitivity_Optimization"
+        directory = "/Volumes/Bucherlab/Sensitivity_Optimization"
     else:
         raise OSError("Unsupported operating system")
     return directory
@@ -99,8 +103,16 @@ def load_experiment_data(experiment_type: str, subfolder_list: list[str], date_k
         except YAMLError as exc:
             print(f"Error in YAML file: {exc}")
             raise
-
-    data = np.load(os.path.join(directory, data_file))
+    data = []
+    if "save_in_chunks" in yaml_data["data"]:
+        for i in np.arange(yaml_data["averages"]//yaml_data["data"]["save_in_chunks"]):
+            chunk_file = data_file.replace(experiment_type+"_ch-0", experiment_type+f"_ch-{i}")
+            print(f"Loading chunk file: {chunk_file}")
+            chunk_data = np.load(os.path.join(directory, chunk_file))
+            data.append(chunk_data)
+            
+    
+    data.append(np.load(os.path.join(directory, data_file)))
     return yaml_data, data
     
 # Sync the yaml files in a directory with a master yaml file

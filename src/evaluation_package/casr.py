@@ -18,8 +18,8 @@ def calc_calibration_frequency(yaml_config: dict) -> float:
     Returns:
         float: The calculated calibration frequency in Hz.
     """
-    tau = yaml_config["pulse_sequence"]["tau"] * 1e-6  # Convert microseconds to seconds
-    rf_freq = yaml_config["static_devices"]["rf_source"]["config"]["frequency"]
+    tau = float(yaml_config["pulse_sequence"]["tau"]) * 1e-6  # Convert microseconds to seconds
+    rf_freq = float(yaml_config["static_devices"]["rf_source"]["config"]["frequency"])
     sensing_freq = 1 / (4 * tau)
     calibration_freq = np.abs(rf_freq - sensing_freq)
     return calibration_freq
@@ -77,7 +77,7 @@ def calc_fourier_frequencies(yaml_config: dict) -> np.ndarray:
     # old number of samples
     return rfftfreq(adjusted_samples, d=dt)
 
-def calc_fourier_transform(yaml_config: dict, data: np.ndarray, values = "abs") -> np.ndarray:
+def calc_fourier_transform(yaml_config: dict, data: np.ndarray, values = "abs", contrast = True) -> np.ndarray:
     """Calculates the fourier transform magnitude or complex values of the CASR contrast signal.
     This function uses the adjusted sample length to calculate the fourier transform.
 
@@ -96,7 +96,10 @@ def calc_fourier_transform(yaml_config: dict, data: np.ndarray, values = "abs") 
     """
     # check that an integer number of oscillations fit into the window for maximal sensitivity
     adjusted_samples = calc_adjusted_samples(yaml_config)[0]
-    contrast = ut.contrast(data)[:adjusted_samples] 
+    if contrast:
+        contrast = ut.contrast(data, experiment_type="CASR_sensitivity")[:adjusted_samples] 
+    else:
+        contrast = data[:adjusted_samples]
 
     if values == "abs":
         fft_final = np.abs(rfft(contrast, norm ="forward"))
@@ -321,11 +324,12 @@ def calc_sensitivity(yaml_config: dict, data: np.ndarray, **kwargs)-> tuple[floa
     window_hz = kwargs.get("window_hz", 50)
     width_hz = kwargs.get("width_hz", 1)
     window_bins = kwargs.get("window_bins", 5)
+    contrast = kwargs.get("contrast", True)
     f0 = calc_calibration_frequency(yaml_config)
     
 
     frequencies = calc_fourier_frequencies(yaml_config)[mask_index:]
-    fft_spectrum_abs = calc_fourier_transform(yaml_config, data)[mask_index:]
+    fft_spectrum_abs = calc_fourier_transform(yaml_config, data, contrast=contrast)[mask_index:]
     idx, freq, amp = find_peak_near(frequencies, fft_spectrum_abs, f0, window_hz=window_hz, window_bins=window_bins)
     measurement_time = calc_measurement_time(yaml_config)
     #calculate noise std

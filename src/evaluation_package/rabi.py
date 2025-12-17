@@ -49,9 +49,9 @@ def linspace_discrete_by_intervals(length_us: float,
 
 
 def microwave_list(yaml_config: dict) -> list:
-    n_meas = yaml_config["pulse_sequence"]["n_meas"]/2
-    sampling_rate = yaml_config["synchroniser"]["config"]["sampling_rate"]
-    max_mw_duration = yaml_config["pulse_sequence"]["max_mw_duration"]  
+    n_meas = int(yaml_config["pulse_sequence"]["n_meas"]/2)
+    sampling_rate = float(yaml_config["synchroniser"]["config"]["sampling_rate"])
+    max_mw_duration = float(yaml_config["pulse_sequence"]["max_mw_duration"])  
     return linspace_discrete_by_intervals(max_mw_duration, n_meas, sampling_rate)
 
 

@@ -105,7 +105,7 @@ def find_special_dips(
         out["baseline"] = y_slow
     return out
 
-def find_backfolding_index(contrast: np.ndarray) -> int:
+def find_backfolding_index(contrast: np.ndarray, maxmin_type = "slow_maxima",idx = 1) -> int:
     """Calculates the index where the backfolding during the CASR calibration happens
 
     Parameters
@@ -120,7 +120,7 @@ def find_backfolding_index(contrast: np.ndarray) -> int:
     """
     summed_contrast = np.sum(contrast, axis=0)
     dict_minmax = find_special_dips(summed_contrast)
-    backfold_id = dict_minmax["slow_minima"][1]
+    backfold_id = dict_minmax[maxmin_type][idx]
     return backfold_id
 
 
@@ -157,7 +157,7 @@ def plot_casr_clibration(yaml_config: dict, data: np.ndarray) -> None:
     plt.legend()
     plt.xlabel("Vpp (V)")
 
-def check_backfolding_index(contrast: np.ndarray) -> None:
+def check_backfolding_index(contrast: np.ndarray, maxmin_type = "slow_maxima", idx = 1) -> None:
     """Checks id the index for the backfolding is in the middle of the peak
 
     Parameters
@@ -165,7 +165,7 @@ def check_backfolding_index(contrast: np.ndarray) -> None:
     contrast : np.ndarray
         contrast array of the CASR calibration
     """
-    backfold_id = find_backfolding_index(contrast)
+    backfold_id = find_backfolding_index(contrast, maxmin_type, idx)
     print(f"The backfolding index is {backfold_id}")
     for i in range(len(contrast)):
         plt.plot(contrast[i])

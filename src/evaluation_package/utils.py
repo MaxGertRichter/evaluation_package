@@ -1,6 +1,6 @@
 import numpy as np
 
-def average_light_level(yaml_config: dict, data: np.ndarray) -> float:
+def average_light_level(yaml_config: dict, data: np.ndarray, reference_channel = 0) -> float:
     """Calculate the average light level in milli Volts based on the provided configuration and data.
 
     Args:
@@ -19,9 +19,9 @@ def average_light_level(yaml_config: dict, data: np.ndarray) -> float:
     number_meas = yaml_config['sensor']['config']['number_measurements']
     av = yaml_config['averages']
     if averaging_mode == "sum":
-        lightlevel = np.average(data[0].flatten())/(number_meas/2)
+        lightlevel = np.average(data[reference_channel].flatten())/(number_meas/2)
     elif averaging_mode == "spread":
-        lightlevel = np.average(data[0].flatten())/(av)
+        lightlevel = np.average(data[reference_channel].flatten())/(av)
     return lightlevel
 
 
@@ -71,7 +71,11 @@ def contrast(data: np.ndarray, experiment_type = None) -> np.ndarray:
     np.ndarray
         contrast of the measurement
     """
-    if experiment_type == "ESR":
+    if experiment_type == "CASR_sensitivity":
+        ref_CASR = data[0].flatten()
+        meas_CASR = data[1].flatten()
+        contrast = meas_CASR - ref_CASR
+    elif experiment_type == "ESR":
         ref_ESR = data[0].flatten()
         meas_ESR = data[1].flatten()
         contrast = meas_ESR/ref_ESR
