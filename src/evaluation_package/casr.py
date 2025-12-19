@@ -48,7 +48,7 @@ def calc_adjusted_samples(yaml_config: dict) -> tuple[int, float]:
     total_time = N_initial * delta_t
     
     # Find the closest total time to an integer number of cycles
-    closest_total_time = round(total_time / period) * period
+    closest_total_time = int(total_time / period) * period
     
     # Calculate the adjusted number of samples
     adjusted_N_initial = round(closest_total_time / delta_t)
@@ -99,8 +99,7 @@ def calc_fourier_transform(yaml_config: dict, data: np.ndarray, values = "abs", 
     if contrast:
         contrast = ut.contrast(data, experiment_type="CASR_sensitivity")[:adjusted_samples] 
     else:
-        contrast = data[:adjusted_samples]
-
+        contrast = data.flatten()[:adjusted_samples]
     if values == "abs":
         fft_final = np.abs(rfft(contrast, norm ="forward"))
     elif values == "complex":
@@ -330,6 +329,11 @@ def calc_sensitivity(yaml_config: dict, data: np.ndarray, **kwargs)-> tuple[floa
 
     frequencies = calc_fourier_frequencies(yaml_config)[mask_index:]
     fft_spectrum_abs = calc_fourier_transform(yaml_config, data, contrast=contrast)[mask_index:]
+    if prominence in kwargs:
+        prominence = kwargs.get("prominence", 0.0001)
+    else:
+        prominence = np.median(fft_spectrum_abs)*5
+
     idx, freq, amp = find_peak_near(frequencies, fft_spectrum_abs, f0, window_hz=window_hz, window_bins=window_bins)
     measurement_time = calc_measurement_time(yaml_config)
     #calculate noise std
