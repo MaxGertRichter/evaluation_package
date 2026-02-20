@@ -62,7 +62,7 @@ def pi_pulse_duration(yaml_config: dict, data: np.ndarray, **kwargs) -> float:
         "savgol_filter": True,
     }
     params = {**defaults, **kwargs}
-    y_Rabi = ut.contrast(data)
+    y_Rabi = ut.contrast(data, "Rabi")
     mw_list = microwave_list(yaml_config)
     if params["savgol_filter"]:
         y_Rabi = savgol_filter(y_Rabi, params["window_length"], params["polyorder"])

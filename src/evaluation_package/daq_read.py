@@ -14,7 +14,7 @@ def calc_contrast(data: np.ndarray)-> np.ndarray:
         Contrast array calculated as measurement/reference.
     """
     ref = data[0].flatten()
-    mess = data[1:].flatten()
+    mess = data[1].flatten()
     contrast = (ref - mess)/ref
     return contrast
 
@@ -52,7 +52,7 @@ def calc_snr(yaml_config: dict, data: np.ndarray) -> np.ndarray:
         SNR array calculated as contrast/sqrt(reference/averages)
     """
     contrast = calc_contrast(data)
-    snr_psn = np.sqrt(data[0].flatten()/yaml_config["averages"])
+    snr_psn = np.sqrt(data[1].flatten()/yaml_config["averages"])
     snr = contrast*snr_psn
     return snr
 

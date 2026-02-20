@@ -19,7 +19,10 @@ def calc_calibration_frequency(yaml_config: dict) -> float:
     """
     tau = yaml_config["pulse_sequence"]["tau"] * 1e-6  # Convert microseconds to seconds
     rf_freq = yaml_config["static_devices"]["rf_source"]["config"]["frequency"]
+    rf_freq = rf_freq[0]
+    rf_freq = rf_freq[-1]
     sensing_freq = 1 / (4 * tau)
+    print(rf_freq, sensing_freq)
     calibration_freq = np.abs(rf_freq - sensing_freq)
     return calibration_freq
 

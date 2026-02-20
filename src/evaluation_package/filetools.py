@@ -6,6 +6,7 @@ from io import StringIO
 from pathlib import Path
 from typing import Any, Dict
 import shutil
+import re
 
 yaml = YAML(typ = 'safe', pure = True)
 yaml.preserve_quotes = True
@@ -35,30 +36,21 @@ def get_data_file(path: str, experiment_type: str, extension: str, date_key: str
     Expected filename pattern: `{experiment_type}_{YYYY-MM-DD-HH-MM-SS}{extension}`
     """
     ext = extension if extension.startswith('.') else f'.{extension}'
-    prefix = experiment_type if experiment_type.endswith('_') else f"{experiment_type}_"
+    prefix = experiment_type
 
-    candidates = [f for f in os.listdir(path) if f.startswith(prefix) and f.endswith(ext)]
+    # build regex: starts with experiment_type, ends with _date_key.ext
+    if date_key is not None:
+        pattern = re.compile(rf"^{re.escape(prefix)}.*_{re.escape(date_key)}{re.escape(ext)}$")
+    else:
+        # match any file that starts with experiment_type and ends with extension
+        pattern = re.compile(rf"^{re.escape(prefix)}.*{re.escape(ext)}$")
+
+    candidates = [f for f in os.listdir(path) if pattern.match(f)]
     if not candidates:
         raise FileNotFoundError(f"No files found in '{path}' matching prefix '{prefix}' and extension '{ext}'.")
+    candidates.sort()
 
-    if date_key is not None:
-        target = f"{prefix}{date_key}{ext}"
-        if target in candidates:
-            return target
-        else:
-            available = ", ".join(sorted(candidates))
-            raise FileNotFoundError(f"Requested file '{target}' not found. Available files: {available}")
-
-    def parse_ts(fname: str) -> datetime:
-        ts = fname[len(prefix):-len(ext)]
-        try:
-            return datetime.strptime(ts, "%Y-%m-%d-%H-%M-%S")
-        except ValueError as e:
-            raise ValueError(
-                f"Filename '{fname}' does not match expected timestamp format YYYY-MM-DD-HH-MM-SS."
-            ) from e
-
-    return max(candidates, key=parse_ts)
+    return candidates[-1]  # exact match found
 
 def get_datafolder_home()-> str:
     """
