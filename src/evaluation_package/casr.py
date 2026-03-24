@@ -131,8 +131,14 @@ def pulse_sequence_duration(yaml_config: dict) -> float:
 
 def calc_measurement_time(yaml_config: dict) -> float:
     ps_duration = pulse_sequence_duration(yaml_config) # in seconds
-    n_meas = yaml_config["sensor"]["config"]["number_measurements"]//2
-    measurement_time = ps_duration * n_meas # this must be divided by two???
+    
+    if "reference_channels" in yaml_config.get("data", {}):
+        reference_channels = yaml_config["data"]["reference_channels"]
+    else:
+        reference_channels = 2
+        
+    n_meas = yaml_config["sensor"]["config"]["number_measurements"] // reference_channels
+    measurement_time = ps_duration * n_meas
     return measurement_time
 
 def find_peak_near(x, y, f0, window_hz=None, window_bins=5):
@@ -324,6 +330,7 @@ def calc_sensitivity(yaml_config: dict, data: np.ndarray, **kwargs)-> tuple[floa
     width_hz = kwargs.get("width_hz", 1)
     window_bins = kwargs.get("window_bins", 5)
     contrast = kwargs.get("contrast", True)
+    mode = kwargs.get("mode", "all_peaks")
     f0 = calc_calibration_frequency(yaml_config)
     
 
@@ -337,7 +344,12 @@ def calc_sensitivity(yaml_config: dict, data: np.ndarray, **kwargs)-> tuple[floa
     idx, freq, amp = find_peak_near(frequencies, fft_spectrum_abs, f0, window_hz=window_hz, window_bins=window_bins)
     measurement_time = calc_measurement_time(yaml_config)
     #calculate noise std
-    noise_mask, peak_info = noise_only_mask(frequencies, fft_spectrum_abs, prominence=prominence, rel_pad=rel_pad, width_hz=width_hz)
+    if mode == "all_peaks":
+        noise_mask, peak_info = noise_only_mask(frequencies, fft_spectrum_abs, prominence=prominence, rel_pad=rel_pad, width_hz=width_hz)
+    elif mode == "only_calibration_peak":
+        noise_mask = np.ones(len(frequencies), dtype=bool)
+        noise_mask[idx] = False
+
     noise_floor = ut.rms(fft_spectrum_abs[noise_mask])
     snr = amp/noise_floor
     #calculate sensitivity

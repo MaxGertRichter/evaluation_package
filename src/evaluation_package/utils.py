@@ -1,3 +1,4 @@
+from typing import Union
 import numpy as np
 
 def average_light_level(yaml_config: dict, data: np.ndarray, reference_channel = 0) -> float:
@@ -24,6 +25,23 @@ def average_light_level(yaml_config: dict, data: np.ndarray, reference_channel =
         lightlevel = np.average(data[reference_channel].flatten())/(av)
     return lightlevel
 
+
+def average_channel(data: np.ndarray, reference_channel = 0) -> float:
+    """Calcutates the average of a channel in the data array.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Data array of the measurement
+    reference_channel : int, optional
+        Channel to calculate the average of, by default 0
+
+    Returns
+    -------
+    float
+        Average of the channel
+    """
+    return np.mean(data[reference_channel,0,:,0])
 
 def ref_mess_voltage(yaml_config:dict, data: np.ndarray) -> tuple[float, float]:
     """Calcualtes the voltage level of the reference and measurement signal.
@@ -72,8 +90,8 @@ def contrast(data: np.ndarray, experiment_type = None) -> np.ndarray:
         contrast of the measurement
     """
     if experiment_type == "CASR_sensitivity":
-        ref_CASR = data[0].flatten()
-        meas_CASR = data[1].flatten()
+        ref_CASR = data[0].squeeze()
+        meas_CASR = data[1].squeeze()
         contrast = meas_CASR - ref_CASR
     elif experiment_type == "ESR":
         ref_ESR = data[0].flatten()
@@ -97,3 +115,28 @@ def rms(arr: np.ndarray) -> float:
         float: The RMS value of the input array.
     """
     return np.sqrt(np.mean(np.square(np.abs(arr))))
+
+def match_resolution(sampling_rate: float, pulse_length_us: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+    """
+    Adjusts the pulse length to the closest value matching the resolution 
+    obtained with the sampling rate.
+    
+    Args:
+        sampling_rate (float): Sampling rate in Hz.
+        pulse_length_us (float | np.ndarray): Target pulse length(s) in microseconds.
+        
+    Returns:
+        float | np.ndarray: The matched pulse length(s) in microseconds.
+    """
+    # Calculate sampling period in microseconds
+    # period_us = (1 / sampling_rate) * 1e6
+    
+    # Or simply: Number of samples = duration_seconds * sampling_rate
+    # duration_seconds = pulse_length_us * 1e-6
+    n_samples = np.round(pulse_length_us * 1e-6 * sampling_rate)
+    
+    # Recalculate duration from integer samples
+    matched_duration_seconds = n_samples / sampling_rate
+    matched_duration_us = matched_duration_seconds * 1e6
+    matched_duration_us = np.round(matched_duration_us, 12)
+    return matched_duration_us

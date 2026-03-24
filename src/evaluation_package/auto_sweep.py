@@ -5,37 +5,84 @@ from typing import Dict, Any, List, Optional, Tuple, Union, Callable
 import glob
 import re
 import inspect
+import os
 from itertools import product
 from .filetools import load_yaml
 
 class AutoSweepLoader:
-    def __init__(self, data_dir: Union[str, Path], yaml_pattern: str = "*.yaml"):
+    def __init__(self, data_dir: Union[str, Path], yaml_pattern: str = "*.yaml", sweep_key: Optional[str] = None):
         """
         Automatically loads and organizes sweep data from a directory based on 'zsweep' metadata.
+        
+        If `sweep_key` is provided, only loads files matching that key.
+        If `sweep_key` is NOT provided, it defaults to the `sweep_key` found in the most recently 
+        modified YAML file. If the most recent file has no `sweep_key`, a ValueError is raised.
 
         Args:
             data_dir: Directory containing YAML configuration files and .npy data files.
             yaml_pattern: Glob pattern to identify YAML files (default: "*.yaml").
+            sweep_key: Optional unique identifier for a specific sweep generation batch.
         """
         self.data_dir = Path(data_dir)
         self.yaml_pattern = yaml_pattern
         
-        # 1. Inspect files and build manifest
-        self.yaml_files = sorted(list(self.data_dir.glob(self.yaml_pattern)))
-        if not self.yaml_files:
+        # 1. Find all YAMLs
+        all_yaml_files = sorted(list(self.data_dir.glob(self.yaml_pattern)))
+        if not all_yaml_files:
             raise FileNotFoundError(f"No YAML files found in {self.data_dir} matching {self.yaml_pattern}")
 
-        # 2. Extract sweep metadata from the first valid file
+        # 2. Filter based on sweep_key
+        if sweep_key:
+            self.yaml_files = self._filter_yamls_by_key(all_yaml_files, sweep_key)
+            if not self.yaml_files:
+                raise ValueError(f"No YAML files found with sweep_key='{sweep_key}' in {self.data_dir}")
+        else:
+            # Automatic detection from most recent file
+            # Sort by modification time (newest last)
+            latest_file = max(all_yaml_files, key=os.path.getmtime)
+            
+            latest_meta = self._get_zsweep_metadata_from_file(latest_file)
+            
+            if latest_meta and 'sweep_key' in latest_meta:
+                detected_key = latest_meta['sweep_key']
+                print(f"Auto-detected sweep_key='{detected_key}' from most recent file '{latest_file.name}'.")
+                self.yaml_files = self._filter_yamls_by_key(all_yaml_files, detected_key)
+            else:
+                # Strict fallback: Error if key is missing in latest file
+                raise ValueError(
+                    f"Most recent file '{latest_file.name}' does not contain a 'sweep_key' in 'zsweep' metadata. "
+                    "Cannot automatically determine which files to load. \n"
+                    "Please provide a specific `sweep_key` argument or ensure your data was generated with the updated modular sweep system."
+                )
+
+        # 3. Extract sweep metadata (from the first valid file in our filtered list)
         self.sweep_meta = self._detect_sweep_metadata()
         self.sweep_type = self.sweep_meta.get('type')
         # Handle nested parameters
         self.output_params = self._extract_params_from_meta(self.sweep_meta)
         
-        # 3. Build detailed manifest (map params to files)
+        # 4. Build detailed manifest (map params to files)
         self.manifest = self._build_manifest()
         
-        # 4. Organize data into structure
+        # 5. Organize data into structure
         self.data, self.coords = self._organize_data()
+
+    def _get_zsweep_metadata_from_file(self, yaml_path: Path) -> Optional[Dict[str, Any]]:
+        """Safe helper to read zsweep metadata from a single file."""
+        try:
+            cfg = load_yaml(yaml_path)
+            return cfg.get('zsweep')
+        except Exception:
+            return None
+
+    def _filter_yamls_by_key(self, yaml_files: List[Path], key: str) -> List[Path]:
+        """Returns only the files that match the given sweep_key."""
+        filtered = []
+        for yf in yaml_files:
+            meta = self._get_zsweep_metadata_from_file(yf)
+            if meta and meta.get('sweep_key') == key:
+                filtered.append(yf)
+        return sorted(filtered)
 
     def _extract_params_from_meta(self, meta: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -255,7 +302,7 @@ class AutoSweepLoader:
                 
             return obj_arr, coords
 
-    def apply(self, func: Callable, by_chunk: bool = False, **kwargs) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+    def apply(self, func: Callable, by_chunk: bool = True, **kwargs) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         """
         Applies a function to each dataset in the sweep.
         

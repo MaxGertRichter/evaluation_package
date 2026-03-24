@@ -10,7 +10,6 @@ from . import rabi
 from . import utils
 from . import filetools
 from . import param_sweep
-from . import datahandler
 
 __all__ = [
     "__version__",
@@ -22,5 +21,4 @@ __all__ = [
     "utils",
     "filetools",
     "param_sweep",
-    "datahandler"
 ]

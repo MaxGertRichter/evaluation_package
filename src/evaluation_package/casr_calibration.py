@@ -133,7 +133,7 @@ def b_sine(x, V, O, A, ϕ):
 
 
 
-def plot_casr_clibration(yaml_config: dict, data: np.ndarray) -> None:
+def plot_casr_clibration(yaml_config: dict, data: np.ndarray, maxmin_type = "slow_maxima", idx = 1) -> None:
     """Plots the CASR calibration and fits a sine to the backfolding maxima. Prints the voltage needed to generate a 10 nT signal.
 
     Parameters
@@ -143,8 +143,9 @@ def plot_casr_clibration(yaml_config: dict, data: np.ndarray) -> None:
     data : np.ndarray
         The measurment data array of the CASR calibration.
     """
-    contrast = ut.contrast(data)
-    backfold_id = find_backfolding_index(contrast)
+    avg = yaml_config['averages']
+    contrast = ut.contrast(data, experiment_type ="CASR_sensitivity") / avg
+    backfold_id = find_backfolding_index(contrast, maxmin_type, idx)
     maximas_backfolding = contrast[:, backfold_id]
     v_axis = calc_Vpp_list(yaml_config)
     opt, _ = curve_fit(b_sine, v_axis, maximas_backfolding, p0=[v_axis[-1], 0, max(maximas_backfolding), 0])
@@ -152,6 +153,7 @@ def plot_casr_clibration(yaml_config: dict, data: np.ndarray) -> None:
     C = b_ac/opt[0]
     V_for_10_nT = 10e-9 / C
     print(f'You need {V_for_10_nT:.4f} V to generate a 10 nT Signal')
+    print("Optimization parameters are: ", opt)
     plt.plot(v_axis, maximas_backfolding, label="Data")
     plt.plot(v_axis, b_sine(v_axis, *opt), label=f'b_ac = {b_ac:.2e} T\nb/V = {b_ac/opt[0]:.2e} T/V')
     plt.legend()
