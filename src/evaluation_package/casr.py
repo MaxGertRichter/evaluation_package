@@ -3,6 +3,7 @@ import numpy as np
 from scipy import constants
 from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter, find_peaks, peak_widths
+import scipy as sp
 from evaluation_package import utils as ut
 
 
@@ -18,12 +19,10 @@ def calc_calibration_frequency(yaml_config: dict) -> float:
         float: The calculated calibration frequency in Hz.
     """
     tau = yaml_config["pulse_sequence"]["tau"] * 1e-6  # Convert microseconds to seconds
-    rf_freq = yaml_config["static_devices"]["rf_source"]["config"]["frequency"]
-    rf_freq = rf_freq[0]
+    rf_freq = yaml_config["static_devices"]["rf_calibration_source"]["config"]["frequency"]
     rf_freq = rf_freq[-1]
     sensing_freq = 1 / (4 * tau)
-    print(rf_freq, sensing_freq)
-    calibration_freq = np.abs(rf_freq - sensing_freq)
+    calibration_freq = np.abs(float(rf_freq) - sensing_freq)
     return calibration_freq
 
 
@@ -59,7 +58,7 @@ def calc_adjusted_samples(yaml_config: dict) -> tuple[int, float]:
 
 
 
-def calc_fourier_frequencies(yaml_config: dict) -> np.ndarray:
+def calc_fourier_frequencies(yaml_config: dict, chop: int = 0) -> np.ndarray:
     """Calculates the fourier frequencies spacing for the CASR experiment.
 
     Parameters
@@ -73,13 +72,13 @@ def calc_fourier_frequencies(yaml_config: dict) -> np.ndarray:
         The fourier frequency axis
     """
     # this needs to be implemented in the other cases also
-    adjusted_samples = calc_adjusted_samples(yaml_config)[0]
+    adjusted_samples = calc_adjusted_samples(yaml_config)[0]-chop
     dt = pulse_sequence_duration(yaml_config)
-    #samples = yaml_config["pulse_sequence"]["n_meas"] // 2
+    # adjusted_samples = yaml_config["pulse_sequence"]["n_meas"] // 2
     # old number of samples
-    return np.fft.rfftfreq(adjusted_samples, d=dt)
+    return sp.fft.rfftfreq(adjusted_samples, d=dt)
 
-def calc_fourier_transform(yaml_config: dict, data: np.ndarray) -> np.ndarray:
+def calc_fourier_transform(yaml_config: dict, data: np.ndarray, chop: int = 0) -> np.ndarray:
     """Calculates the fourier transform of the CASR contrast signal.
     This function uses the adjusted sample length to calculate the fourier transform.
 
@@ -96,10 +95,14 @@ def calc_fourier_transform(yaml_config: dict, data: np.ndarray) -> np.ndarray:
     np.ndarray
         The fourier transformed contrast signal.
     """
+    # Support both legacy (2, 1, 1000, 1) and new (2, 1, 1, 1000, 1) data layouts.
+    if data.ndim == 5 and data.shape[2] == 1:
+        data = np.squeeze(data, axis=2)
+
     # check that an integer number of oscillations fit into the window for maximal sensitivity
-    adjusted_samples = calc_adjusted_samples(yaml_config)[0]
-    contrast = ut.contrast(data)[:adjusted_samples] 
-    fft_final = np.abs(np.fft.rfft(contrast, norm ="ortho"))
+    adjusted_samples = calc_adjusted_samples(yaml_config)[0] - chop
+    contrast = ut.contrast(data, "CASR")[:adjusted_samples]
+    fft_final = np.abs(sp.fft.rfft(contrast, norm ="ortho"))
     return fft_final
 
 def pulse_sequence_duration(yaml_config: dict) -> float:
@@ -115,6 +118,7 @@ def pulse_sequence_duration(yaml_config: dict) -> float:
     float
         The total duration of the pulse sequence cycle in seconds.
     """
+
     if "duration_pulseseq_cycle" in yaml_config:
         return yaml_config["duration_pulseseq_cycle"] * 1e-6
     elif "duration_puseseq_cycle" in yaml_config:
@@ -296,7 +300,7 @@ def noise_only_mask(
     return mask, peaks_info
 
 
-def calc_sensitivity(yaml_config: dict, data: np.ndarray, **kwargs)-> tuple[float, float, float]:
+def calc_sensitivity(yaml_config: dict, frequencies: np.ndarray, fft_spectrum:np.ndarray, set_freq:float | None = None, **kwargs)-> tuple[float, float, float]:
     """Calculates the sensitivity and SNR of a singleshot CASR measurement.
 
     Parameters
@@ -315,22 +319,30 @@ def calc_sensitivity(yaml_config: dict, data: np.ndarray, **kwargs)-> tuple[floa
     """
     prominence = kwargs.get("prominence", 0.005)
     rel_pad = kwargs.get("rel_pad", 10)
-    mask_index = kwargs.get("mask_index", 20)
-    window_hz = kwargs.get("window_hz", None)
+    mask_index = kwargs.get("mask_index", 0)
+    window_hz = kwargs.get("window_hz", 50)
     width_hz = kwargs.get("width_hz", 1)
     window_bins = kwargs.get("window_bins", 5)
-    f0 = calc_calibration_frequency(yaml_config)
-    
+    if set_freq:
+        f0 = set_freq
+    else:
+        f0 = calc_calibration_frequency(yaml_config)
 
-    frequencies = calc_fourier_frequencies(yaml_config)[mask_index:]
-    fft_spectrum = calc_fourier_transform(yaml_config, data)[mask_index:]
     idx, freq, amp = find_peak_near(frequencies, fft_spectrum, f0, window_hz=window_hz, window_bins=window_bins)
     measurement_time = calc_measurement_time(yaml_config)
     # rescale the amplitude
     fft_spectrum_normalized = fft_spectrum/amp
-
     noise_mask, peak_info = noise_only_mask(frequencies, fft_spectrum, prominence=prominence, rel_pad=rel_pad, width_hz=width_hz)
+    #plt.plot(frequencies, fft_spectrum)
+    #plt.show()
+    #print("prominence:", prominence, "width_hz", width_hz, "rel_pad:", rel_pad)
     std = np.std(fft_spectrum_normalized[noise_mask])
+    #print(fft_spectrum_normalized.shape, noise_mask.shape)
+    #plt.plot(frequencies, fft_spectrum_normalized)
+    #plt.plot(frequencies[noise_mask], fft_spectrum_normalized[noise_mask])
+    #plt.show()
+    #plt.plot(noise_mask)
+    #plt.show()
     snr = 1/std
     sensitivity = 10e-9 /snr * np.sqrt(measurement_time) # in T/√Hz
 

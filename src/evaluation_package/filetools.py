@@ -48,7 +48,16 @@ def get_data_file(path: str, experiment_type: str, extension: str, date_key: str
     candidates = [f for f in os.listdir(path) if pattern.match(f)]
     if not candidates:
         raise FileNotFoundError(f"No files found in '{path}' matching prefix '{prefix}' and extension '{ext}'.")
-    candidates.sort()
+
+    date_pattern = re.compile(rf"_(\d{{4}}-\d{{2}}-\d{{2}}-\d{{2}}-\d{{2}}-\d{{2}}){re.escape(ext)}$")
+
+    def extract_date(filename: str) -> datetime:
+        match = date_pattern.search(filename)
+        if not match:
+            return datetime.min
+        return datetime.strptime(match.group(1), "%Y-%m-%d-%H-%M-%S")
+
+    candidates.sort(key=lambda name: (extract_date(name), name))
 
     return candidates[-1]  # exact match found
 
@@ -63,7 +72,8 @@ def get_datafolder_home()-> str:
         OSError: If the operating system is not Windows or macOS.
     """
     if platform.system() == "Windows":
-        directory = r"G:\Bucherlab\Table Top Julia\Experiment\QupytMessungen\2025-10-28 FirstQupytMeasurements"
+        directory = r"G:\Bucherlab\Table Top Julia\Experiment\QupytMessungen\2026-02-09 AddNewSequences"
+        #directory = r"G:\Bucherlab\Table Top Julia\Experiment\QupytMessungen\2026-02-09 AddNewSequences\data\CASR_sweeps\CASR_sensitivity_sweep_readout_phase"
     elif platform.system() == "Darwin":  # macOS
         directory = "/System/Volumes/Data/mnt/lab_cloud/Bucherlab/Sensitivity_Optimization"
     else:

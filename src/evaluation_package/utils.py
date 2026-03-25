@@ -71,11 +71,14 @@ def contrast(data: np.ndarray, experiment_type = None) -> np.ndarray:
     np.ndarray
         contrast of the measurement
     """
-    if experiment_type == "ESR" or "Rabi":
+    exp_type = "" if experiment_type is None else str(experiment_type)
+
+    if exp_type in ("ESR", "Rabi"):
         ref_ESR = data[1].flatten()
         meas_ESR = data[0].flatten()
         contrast = meas_ESR/ref_ESR
-    if experiment_type == "CASR":
+
+    elif "CASR" in exp_type:
         ref_ESR = data[1].flatten()
         meas_ESR = data[0].flatten()
         contrast = ref_ESR-meas_ESR

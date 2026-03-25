@@ -14,7 +14,7 @@ def calc_b_ac(yaml_config: dict) -> float:
     yaml_config : dict
         The configuration yaml_file to configrue the experiment.
     """
-    f_rf = yaml_config['dynamic_devices']['rf_source']['config']['frequency'][0]
+    f_rf = yaml_config['dynamic_devices']['rf_calibration_source']['config']['frequency'][1][0]
     N = yaml_config['pulse_sequence']['N'] * 8 # assuming it is a XY8 block
     g_e = constants.physical_constants['electron g factor'][0] *-1
     mu_B = constants.physical_constants['Bohr magneton'][0]
@@ -36,8 +36,8 @@ def calc_Vpp_list(yaml_config: dict) -> np.ndarray:
     v_axis : np.ndarray
         The voltage axis for the CASR calibration experiment.
     """
-    v_min = yaml_config['dynamic_devices']['rf_source']['config']['amplitude'][0]
-    v_max = yaml_config['dynamic_devices']['rf_source']['config']['amplitude'][1]
+    v_min = yaml_config['dynamic_devices']['rf_calibration_source']['config']['amplitude'][1][0]
+    v_max = yaml_config['dynamic_devices']['rf_calibration_source']['config']['amplitude'][1][1]
     v_steps = yaml_config['dynamic_steps']
     v_axis = np.linspace(v_min, v_max, v_steps)
     return v_axis
@@ -133,7 +133,7 @@ def b_sine(x, V, O, A, ϕ):
 
 
 
-def plot_casr_clibration(yaml_config: dict, data: np.ndarray) -> None:
+def plot_casr_calibration(yaml_config: dict, data: np.ndarray) -> None:
     """Plots the CASR calibration and fits a sine to the backfolding maxima. Prints the voltage needed to generate a 10 nT signal.
 
     Parameters
@@ -143,9 +143,10 @@ def plot_casr_clibration(yaml_config: dict, data: np.ndarray) -> None:
     data : np.ndarray
         The measurment data array of the CASR calibration.
     """
-    contrast = ut.contrast(data)
-    backfold_id = find_backfolding_index(contrast)
-    maximas_backfolding = contrast[:, backfold_id]
+    contrast = ut.contrast(data, "CASR_callibration")
+    #backfold_id = find_backfolding_index(contrast)
+    #maximas_backfolding = contrast[:, backfold_id]
+    maximas_backfolding = contrast
     v_axis = calc_Vpp_list(yaml_config)
     opt, _ = curve_fit(b_sine, v_axis, maximas_backfolding, p0=[v_axis[-1], 0, max(maximas_backfolding), 0])
     b_ac = calc_b_ac(yaml_config)
@@ -153,9 +154,11 @@ def plot_casr_clibration(yaml_config: dict, data: np.ndarray) -> None:
     V_for_10_nT = 10e-9 / C
     print(f'You need {V_for_10_nT:.4f} V to generate a 10 nT Signal')
     plt.plot(v_axis, maximas_backfolding, label="Data")
-    plt.plot(v_axis, b_sine(v_axis, *opt), label=f'b_ac = {b_ac:.2e} T\nb/V = {b_ac/opt[0]:.2e} T/V')
+    plt.plot(v_axis, b_sine(v_axis, *opt), label=f'b_ac = {b_ac:.2e} T\nb/V = {b_ac/opt[0]:.2e} T/V\n{V_for_10_nT:.4f} V for a 10 nT Signal')
     plt.legend()
-    plt.xlabel("Vpp (V)")
+    plt.title(yaml_config["filename"])
+    plt.xlabel('Calibration voltage (Vpp)')
+    plt.ylabel('Contrast')
 
 def check_backfolding_index(contrast: np.ndarray) -> None:
     """Checks id the index for the backfolding is in the middle of the peak
