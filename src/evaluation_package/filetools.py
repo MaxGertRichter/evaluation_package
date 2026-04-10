@@ -4,8 +4,9 @@ from ruamel.yaml import YAML, YAMLError
 import numpy as np
 from io import StringIO
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Union
 import shutil
+from .config import config
 
 yaml = YAML(typ = 'safe', pure = True)
 yaml.preserve_quotes = True
@@ -26,7 +27,7 @@ def save_yaml(data, path):
         f.write(text)
 
 
-def get_data_file(path: str, experiment_type: str, extension: str, date_key: str | None = None) -> str:
+def get_data_file(path: Union[Path, str], experiment_type: str, extension: str, date_key: str | None = None) -> str:
     """
     Return the data filename for a given experiment and extension. If `date_key` is
     provided, return the file matching that exact timestamp; otherwise return the
@@ -36,8 +37,10 @@ def get_data_file(path: str, experiment_type: str, extension: str, date_key: str
     """
     ext = extension if extension.startswith('.') else f'.{extension}'
     prefix = experiment_type if experiment_type.endswith('_') else f"{experiment_type}_"
-
-    candidates = [f for f in os.listdir(path) if f.startswith(prefix) and f.endswith(ext)]
+    
+    path_obj = Path(path)
+    candidates = [f.name for f in path_obj.iterdir() if f.name.startswith(prefix) and f.name.endswith(ext)]
+    
     if not candidates:
         raise FileNotFoundError(f"No files found in '{path}' matching prefix '{prefix}' and extension '{ext}'.")
 
@@ -65,33 +68,27 @@ def get_data_file(path: str, experiment_type: str, extension: str, date_key: str
 
 def get_datafolder_home()-> str:
     """
-    Determines the root directory for data storage based on the operating system.
+    Determines the root directory for data storage based on the configuration file.
 
     Returns:
         str: The root directory path for data storage.
-
-    Raises:
-        OSError: If the operating system is not Windows or macOS.
     """
-    if platform.system() == "Windows":
-        directory = r"G:\Bucherlab\Sensitivity_Optimization"
-    elif platform.system() == "Darwin":  # macOS
-        directory = "/Volumes/001/Bucherlab/Sensitivity_Optimization"
-        #directory = "/System/Volumes/Data/mnt/lab_cloud/Bucherlab/Sensitivity_Optimization"
-        #directory = "/Volumes/Bucherlab/Sensitivity_Optimization"
-        #directory = "/mnt/lab_cloud/Bucherlab/Sensitivity_Optimization"
-    else:
-        raise OSError("Unsupported operating system")
-    return directory
+    return str(config.data_folder_home)
 
-def load_experiment_data(experiment_type: str, subfolder_list: list[str], date_key: str | None = None, **kwargs) -> tuple:
+def load_experiment_data(experiment_type: str, subfolders: Union[str, list, tuple], date_key: str | None = None, **kwargs) -> tuple:
     """
     Loads experiment data (YAML config and NumPy array) from a specified directory.
+    `subfolders` can be a single relative path string like "01_Datafolder/01_Random_runs" 
+    or a list/tuple of parts like ["01_Datafolder", "01_Random_runs"].
 
     Filenames are expected to follow the convention:
         `{experiment_type}_{YYYY-MM-DD-HH-MM-SS}.yaml` and `.npy`
     """
-    directory = os.path.join(get_datafolder_home(), *subfolder_list)
+    if isinstance(subfolders, (list, tuple)):
+        directory = Path(get_datafolder_home()).joinpath(*subfolders)
+    else:
+        # pathlib handles forward/backward slash conversions implicitly based on OS
+        directory = Path(get_datafolder_home()) / subfolders
 
     yaml_file = get_data_file(directory, experiment_type, ".yaml", date_key)
     data_file = get_data_file(directory, experiment_type, ".npy", date_key)
@@ -99,7 +96,7 @@ def load_experiment_data(experiment_type: str, subfolder_list: list[str], date_k
     if kwargs.get("print", False):
         print("The data of the following experiment is loaded:", yaml_file)
 
-    with open(os.path.join(directory, yaml_file), 'r') as file:
+    with open(directory / yaml_file, 'r') as file:
         try:
             yaml_data = yaml.load(file)
         except YAMLError as exc:
@@ -110,11 +107,11 @@ def load_experiment_data(experiment_type: str, subfolder_list: list[str], date_k
         for i in np.arange(yaml_data["averages"]//yaml_data["data"]["save_in_chunks"]):
             chunk_file = data_file.replace(experiment_type+"_ch-0", experiment_type+f"_ch-{i}")
             print(f"Loading chunk file: {chunk_file}")
-            chunk_data = np.load(os.path.join(directory, chunk_file))
+            chunk_data = np.load(directory / chunk_file)
             data.append(chunk_data)
             
     
-    data.append(np.load(os.path.join(directory, data_file)))
+    data.append(np.load(directory / data_file))
     return yaml_data, data
     
 # Sync the yaml files in a directory with a master yaml file

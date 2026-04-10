@@ -1,0 +1,6 @@
+data_folder_home:
+  Windows: 'G:\Bucherlab\Sensitivity_Optimization'
+  Darwin: "/Volumes/001-1/Bucherlab/Sensitivity_Optimization"
+  default: "./data"
+
+rf_calibration_device_key: "rf_source"
