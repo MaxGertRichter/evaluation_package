@@ -26,14 +26,14 @@ def average_light_level(yaml_config: dict, data: np.ndarray, reference_channel =
     number_meas = yaml_config['sensor']['config']['number_measurements']
     av = yaml_config['averages']
     if averaging_mode == "sum":
-        lightlevel = np.average(data[REF_IDX].flatten())/(number_meas/2)
+        lightlevel = np.average(data[reference_channel].flatten())/(number_meas/2)
     elif averaging_mode == "spread":
-        lightlevel = np.average(data[REF_IDX].flatten())/(av)
+        lightlevel = np.average(data[reference_channel].flatten())/(av)
     return lightlevel
 
 
 def average_channel(data: np.ndarray, reference_channel = 0) -> float:
-    """Calcutates the average of a channel in the data array.
+    """Calculates the average of a channel in the data array.
 
     Parameters
     ----------
@@ -49,8 +49,8 @@ def average_channel(data: np.ndarray, reference_channel = 0) -> float:
     """
     return np.mean(data[reference_channel,0,:,0])
 
-def ref_mess_voltage(yaml_config:dict, data: np.ndarray) -> tuple[float, float]:
-    """Calcualtes the voltage level of the reference and measurement signal.
+def ref_mess_voltage(yaml_config:dict, data: np.ndarray) -> np.ndarray:
+    """Calculates the voltage level of the reference and measurement signal.
 
     Parameters
     ----------

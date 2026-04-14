@@ -357,7 +357,8 @@ def calc_sensitivity(yaml_config: dict, data: np.ndarray, **kwargs)-> tuple[floa
     elif mode == "only_calibration_peak":
         noise_mask = np.ones(len(frequencies), dtype=bool)
         noise_mask[idx] = False
-
+    else:
+        raise ValueError(f"Invalid mode '{mode}'. Expected 'all_peaks' or 'only_calibration_peak'.")
     noise_floor = ut.rms(fft_spectrum_abs[noise_mask])
     snr = amp/noise_floor
     #calculate sensitivity
