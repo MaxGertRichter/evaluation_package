@@ -1,5 +1,11 @@
 from typing import Union
 import numpy as np
+from evaluation_package.config import config
+
+# Set configuration variables once when the module loads
+_cfg = config._cfg
+REF_IDX = _cfg.get("data_channels", {}).get("reference", 0)
+MEAS_IDX = _cfg.get("data_channels", {}).get("measurement", 1)
 
 def average_light_level(yaml_config: dict, data: np.ndarray, reference_channel = 0) -> float:
     """Calculate the average light level in milli Volts based on the provided configuration and data.
@@ -20,9 +26,9 @@ def average_light_level(yaml_config: dict, data: np.ndarray, reference_channel =
     number_meas = yaml_config['sensor']['config']['number_measurements']
     av = yaml_config['averages']
     if averaging_mode == "sum":
-        lightlevel = np.average(data[reference_channel].flatten())/(number_meas/2)
+        lightlevel = np.average(data[REF_IDX].flatten())/(number_meas/2)
     elif averaging_mode == "spread":
-        lightlevel = np.average(data[reference_channel].flatten())/(av)
+        lightlevel = np.average(data[REF_IDX].flatten())/(av)
     return lightlevel
 
 
@@ -58,9 +64,9 @@ def ref_mess_voltage(yaml_config:dict, data: np.ndarray) -> tuple[float, float]:
     tuple[float, float]
         Voltage level of the reference and measurement signal
     """
-    ref = data[0].flatten()
-    mess = data[1].flatten()
-    volts = np.empty(2,len(ref))
+    ref = data[REF_IDX].flatten()
+    mess = data[MEAS_IDX].flatten()
+    volts = np.empty((2, len(ref)))
 
     averaging_mode = yaml_config["data"]["averaging_mode"]
     number_meas = yaml_config['sensor']['config']['number_measurements']
@@ -75,7 +81,7 @@ def ref_mess_voltage(yaml_config:dict, data: np.ndarray) -> tuple[float, float]:
 
 
 def contrast(data: np.ndarray, experiment_type = None) -> np.ndarray:
-    """Calculates the contrast for all measurement types only ESR has a different calculation
+    """Calculates the contrast for all measurement types.
 
     Parameters
     ----------
@@ -89,17 +95,28 @@ def contrast(data: np.ndarray, experiment_type = None) -> np.ndarray:
     np.ndarray
         contrast of the measurement
     """
-    if experiment_type == "CASR_sensitivity":
-        ref_CASR = data[0].squeeze()
-        meas_CASR = data[1].squeeze()
-        contrast = meas_CASR - ref_CASR
-    elif experiment_type == "ESR":
-        ref_ESR = data[0].flatten()
-        meas_ESR = data[1].flatten()
+    # Convert lists to a numpy array for universal handling
+    if isinstance(data, list):
+        data = np.array(data)
+
+    # Autocorrect 5-dimensional data layouts down to 4D
+    if data.ndim == 5 and data.shape[2] == 1:
+        data = np.squeeze(data, axis=2)
+
+    exp_type = "" if experiment_type is None else str(experiment_type)
+
+    if exp_type in ("ESR", "Rabi"):
+        ref_ESR = data[REF_IDX].flatten()
+        meas_ESR = data[MEAS_IDX].flatten()
         contrast = meas_ESR/ref_ESR
+    elif "CASR" in exp_type:
+        ref_CASR = data[REF_IDX].squeeze()
+        meas_CASR = data[MEAS_IDX].squeeze()
+        # CASR calibration and sensitivity uses ref - meas
+        contrast = ref_CASR - meas_CASR
     else:
-        ref = data[0]
-        mess = data[1]
+        ref = data[REF_IDX]
+        mess = data[MEAS_IDX]
         contrast = np.squeeze((mess - ref) / (mess + ref))
     
     return contrast

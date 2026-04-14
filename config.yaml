@@ -1,6 +1,26 @@
-data_folder_home:
-  Windows: 'G:\Bucherlab\Sensitivity_Optimization'
-  Darwin: "/Volumes/001-1/Bucherlab/Sensitivity_Optimization"
-  default: "./data"
+# ======================================================================
+# evaluation_package Global Configuration
+# ======================================================================
 
-rf_calibration_device_key: "rf_source"
+# 1. Data Directory Home
+# Provide the absolute path to the network drive or local directory 
+# where your measurement outputs (YAML/NPY files) are stored.
+# The package will automatically use the correct path depending on your OS.
+# The defaults currently point to the included 'example_data' directory for testing out-of-the-box.
+data_folder_home:
+  Windows: "./example_data" # Example for your specific setup: 'G:\Bucherlab\...'
+  Darwin: "./example_data"  # Example for Macs: '/Volumes/001/Bucherlab/...'
+  default: "./example_data"
+
+# 2. Data Channel Map
+# Define the hardware index of your measurement and reference channels.
+# Because the physical wiring layout on DAQ boards can differ between 
+# computers and setups, you can globally flip the mappings here.
+data_channels:
+  reference: 0
+  measurement: 1
+
+# 3. Calibration Keys
+# Choose the key identifier present in your generated data measurement
+# yaml configs indicating which signal source performs the CASR calibration.
+rf_calibration_device_key: "rf_source" # Alternative used in other forks: "rf_calibration_source"

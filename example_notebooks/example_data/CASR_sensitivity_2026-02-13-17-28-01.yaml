@@ -1,0 +1,60 @@
+averages: 30
+data:
+  averaging_mode: spread
+  dynamic_steps: 1
+  save_in_chunks: 1
+duration_pulseseq_cycle: 61.0
+dynamic_devices: null
+dynamic_steps: 1
+experiment_type: CASR_sensitivity
+filename: CASR_sensitivity_2026-02-13-17-28-01
+measurement_status: success
+ps_path: G:\Bucherlab\People\Current People\Max\Build up files\07_Standard_Pulse_Sequences\sequence\CASR_sensitivity
+  copy.py
+pulse_sequence:
+  Laser_mw_time: -0.3
+  N: 10
+  awg_frequency: 2.1912e9
+  daq_read_delay: 1.46
+  duration_offset: 0
+  laserduration: 10
+  n_meas: 1000
+  pi: 0.0316
+  pi_half: 0.0158
+  readout_phase: -0.039
+  sampling_rate: 20e9
+  seq_type: XY8
+  spacing: 0.5
+  tau: 0.125
+  ts_end: 0.92
+  ts_start: 0.92
+qupyt_version: 0.1.dev133+gf480c27
+sensor:
+  config:
+    apd_input: Dev8/ai1
+    max_voltage: 8.0
+    min_voltage: -8.0
+    number_measurements: 1000
+  type: DAQ
+static_devices:
+  rf_source:
+    address: TCPIP::192.168.1.4::INSTR
+    config:
+      amplitude: 0.01
+      frequency: 1.9995e6
+    device_type: Rigol
+synchroniser:
+  channel_mapping:
+    LASER: 1
+    MW: 0
+    READ: 2
+    RF: C
+    START: A
+    WAIT: B
+  config:
+    address: TCPIP0::192.168.1.2::inst0::INSTR
+    channels:
+    - 1
+    sampling_rate: 20e9
+  type: TekAWG
+t_phase_accumulation: 19.979999999999997

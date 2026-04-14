@@ -35,36 +35,36 @@ def get_data_file(path: Union[Path, str], experiment_type: str, extension: str, 
 
     Expected filename pattern: `{experiment_type}_{YYYY-MM-DD-HH-MM-SS}{extension}`
     """
+    import re
     ext = extension if extension.startswith('.') else f'.{extension}'
-    prefix = experiment_type if experiment_type.endswith('_') else f"{experiment_type}_"
-    
+    prefix = experiment_type
+
+    # build regex: starts with experiment_type, ends with _date_key.ext
+    if date_key is not None:
+        pattern = re.compile(rf"^{re.escape(prefix)}.*_{re.escape(date_key)}{re.escape(ext)}$")
+    else:
+        # match any file that starts with experiment_type and ends with extension
+        pattern = re.compile(rf"^{re.escape(prefix)}.*{re.escape(ext)}$")
+
     path_obj = Path(path)
-    candidates = [f.name for f in path_obj.iterdir() if f.name.startswith(prefix) and f.name.endswith(ext)]
+    candidates = [f.name for f in path_obj.iterdir() if pattern.match(f.name)]
     
     if not candidates:
         raise FileNotFoundError(f"No files found in '{path}' matching prefix '{prefix}' and extension '{ext}'.")
 
-    if date_key is not None:
-        target_suffix = f"{date_key}{ext}"
-        matches = [c for c in candidates if c.endswith(target_suffix)]
-        target = f"*{target_suffix}"
-        if matches:
-            return matches[0]
-        else:
-            available = ", ".join(sorted(candidates))
-            raise FileNotFoundError(f"Requested file '{target}' not found. Available files: {available}")
+    date_pattern = re.compile(rf"_(\d{{4}}-\d{{2}}-\d{{2}}-\d{{2}}-\d{{2}}-\d{{2}}){re.escape(ext)}$")
 
-    def parse_ts(fname: str) -> datetime:
-        len_ts = len("YYYY-MM-DD-HH-MM-SS")
-        ts = fname[-len_ts-len(ext):-len(ext)]
-        try:
-            return datetime.strptime(ts, "%Y-%m-%d-%H-%M-%S")
-        except ValueError as e:
-            raise ValueError(
-                f"Filename '{fname}' does not match expected timestamp format YYYY-MM-DD-HH-MM-SS."
-            ) from e
+    def extract_date(filename: str) -> datetime:
+        match = date_pattern.search(filename)
+        if not match:
+            return datetime.min
+        return datetime.strptime(match.group(1), "%Y-%m-%d-%H-%M-%S")
 
-    return max(candidates, key=parse_ts)
+    candidates.sort(key=lambda name: (extract_date(name), name))
+
+    return candidates[-1]  # exact match found
+
+DATA_FOLDER_HOME = str(config.data_folder_home)
 
 def get_datafolder_home()-> str:
     """
@@ -73,7 +73,7 @@ def get_datafolder_home()-> str:
     Returns:
         str: The root directory path for data storage.
     """
-    return str(config.data_folder_home)
+    return DATA_FOLDER_HOME
 
 def load_experiment_data(experiment_type: str, subfolders: Union[str, list, tuple], date_key: str | None = None, **kwargs) -> tuple:
     """

@@ -1,4 +1,10 @@
 import numpy as np
+from evaluation_package.config import config
+
+# Set configuration variables once when the module loads
+_cfg = config._cfg
+REF_IDX = _cfg.get("data_channels", {}).get("reference", 0)
+MEAS_IDX = _cfg.get("data_channels", {}).get("measurement", 1)
 
 def calc_contrast(data: np.ndarray)-> np.ndarray:
     """Calculates the contrast for the DAQ Read Sweep experiment.
@@ -13,8 +19,8 @@ def calc_contrast(data: np.ndarray)-> np.ndarray:
     np.ndarray
         Contrast array calculated as measurement/reference.
     """
-    ref = data[0].flatten()
-    mess = data[1:].flatten()
+    ref = data[REF_IDX].flatten()
+    mess = data[MEAS_IDX].flatten()
     contrast = (ref - mess)/ref
     return contrast
 
@@ -52,7 +58,7 @@ def calc_snr(yaml_config: dict, data: np.ndarray) -> np.ndarray:
         SNR array calculated as contrast/sqrt(reference/averages)
     """
     contrast = calc_contrast(data)
-    snr_psn = np.sqrt(np.abs(data[0].flatten())/yaml_config["averages"])
+    snr_psn = np.sqrt(np.abs(data[REF_IDX].flatten())/yaml_config["averages"])
     snr = contrast*snr_psn
     return snr
 

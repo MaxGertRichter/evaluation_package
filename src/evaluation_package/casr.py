@@ -5,7 +5,9 @@ from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter, find_peaks, peak_widths
 from scipy.fft import fft, rfft, fftfreq, rfftfreq
 from evaluation_package import utils as ut
+from evaluation_package.config import config
 
+RF_CAL_KEY = config.rf_calibration_device_key
 
 #-----------General CASR functions----------------
 
@@ -19,7 +21,7 @@ def calc_calibration_frequency(yaml_config: dict) -> float:
         float: The calculated calibration frequency in Hz.
     """
     tau = float(yaml_config["pulse_sequence"]["tau"]) * 1e-6  # Convert microseconds to seconds
-    rf_freq = float(yaml_config["static_devices"]["rf_source"]["config"]["frequency"])
+    rf_freq = float(yaml_config["static_devices"][RF_CAL_KEY]["config"]["frequency"])
     sensing_freq = 1 / (4 * tau)
     calibration_freq = np.abs(rf_freq - sensing_freq)
     return calibration_freq
@@ -57,12 +59,12 @@ def calc_adjusted_samples(yaml_config: dict) -> tuple[int, float]:
 
 
 
-def calc_fourier_frequencies(yaml_config: dict) -> np.ndarray:
+def calc_fourier_frequencies(yaml_config: dict, **kwargs) -> np.ndarray:
     """Calculates the fourier frequencies spacing for the CASR experiment.
 
     Parameters
     ----------
-    cfg : dict
+    yaml_config : dict
         The configuration yaml_file to configrue the experiment.
 
     Returns
@@ -71,13 +73,14 @@ def calc_fourier_frequencies(yaml_config: dict) -> np.ndarray:
         The fourier frequency axis
     """
     # this needs to be implemented in the other cases also
-    adjusted_samples = calc_adjusted_samples(yaml_config)[0]
+    chop = kwargs.get("chop", 0)
+    adjusted_samples = calc_adjusted_samples(yaml_config)[0] - chop
     dt = pulse_sequence_duration(yaml_config)
     #samples = yaml_config["pulse_sequence"]["n_meas"] // 2
     # old number of samples
     return rfftfreq(adjusted_samples, d=dt)
 
-def calc_fourier_transform(yaml_config: dict, data: np.ndarray, values = "abs", contrast = True) -> np.ndarray:
+def calc_fourier_transform(yaml_config: dict, data: np.ndarray, values = "abs", contrast = True, **kwargs) -> np.ndarray:
     """Calculates the fourier transform magnitude or complex values of the CASR contrast signal.
     This function uses the adjusted sample length to calculate the fourier transform.
 
@@ -95,15 +98,17 @@ def calc_fourier_transform(yaml_config: dict, data: np.ndarray, values = "abs", 
         The fourier transformed contrast signal.
     """
     # check that an integer number of oscillations fit into the window for maximal sensitivity
-    adjusted_samples = calc_adjusted_samples(yaml_config)[0]
+    chop = kwargs.get("chop", 0)
+    norm = kwargs.get("norm", "forward")
+    adjusted_samples = calc_adjusted_samples(yaml_config)[0] - chop
     if contrast:
-        contrast = ut.contrast(data, experiment_type="CASR_sensitivity")[:adjusted_samples] 
+        contrast = ut.contrast(data, experiment_type="CASR_sensitivity")[chop:adjusted_samples+chop] 
     else:
-        contrast = data.flatten()[:adjusted_samples]
+        contrast = data.flatten()[chop:adjusted_samples+chop]
     if values == "abs":
-        fft_final = np.abs(rfft(contrast, norm ="forward"))
+        fft_final = np.abs(rfft(contrast, norm=norm))
     elif values == "complex":
-        fft_final = rfft(contrast, norm ="forward")
+        fft_final = rfft(contrast, norm=norm)
     return fft_final
 
 def pulse_sequence_duration(yaml_config: dict) -> float:
@@ -334,8 +339,11 @@ def calc_sensitivity(yaml_config: dict, data: np.ndarray, **kwargs)-> tuple[floa
     f0 = calc_calibration_frequency(yaml_config)
     
 
-    frequencies = calc_fourier_frequencies(yaml_config)[mask_index:]
-    fft_spectrum_abs = calc_fourier_transform(yaml_config, data, contrast=contrast)[mask_index:]
+    chop = kwargs.get("chop", 0)
+    norm = kwargs.get("norm", "forward")
+    
+    frequencies = calc_fourier_frequencies(yaml_config, chop=chop)[mask_index:]
+    fft_spectrum_abs = calc_fourier_transform(yaml_config, data, contrast=contrast, chop=chop, norm=norm)[mask_index:]
     if prominence in kwargs:
         prominence = kwargs.get("prominence", 0.0001)
     else:

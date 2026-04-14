@@ -4,6 +4,9 @@ from scipy.signal import savgol_filter, find_peaks
 from scipy.optimize import curve_fit
 from matplotlib import pyplot as plt
 from evaluation_package import utils as ut
+from evaluation_package.config import config
+
+RF_CAL_KEY = config.rf_calibration_device_key
 
 def calc_b_ac(yaml_config: dict) -> float:
     """Calculates the magnetic field strength b_ac for the CASR calibration, 
@@ -14,7 +17,7 @@ def calc_b_ac(yaml_config: dict) -> float:
     yaml_config : dict
         The configuration yaml_file to configrue the experiment.
     """
-    f_rf = yaml_config['dynamic_devices']['rf_source']['config']['frequency'][0]
+    f_rf = yaml_config['dynamic_devices'][RF_CAL_KEY]['config']['frequency'][0]
     N = yaml_config['pulse_sequence']['N'] * 8 # assuming it is a XY8 block
     g_e = constants.physical_constants['electron g factor'][0] *-1
     mu_B = constants.physical_constants['Bohr magneton'][0]
@@ -36,8 +39,8 @@ def calc_Vpp_list(yaml_config: dict) -> np.ndarray:
     v_axis : np.ndarray
         The voltage axis for the CASR calibration experiment.
     """
-    v_min = yaml_config['dynamic_devices']['rf_source']['config']['amplitude'][0]
-    v_max = yaml_config['dynamic_devices']['rf_source']['config']['amplitude'][1]
+    v_min = yaml_config['dynamic_devices'][RF_CAL_KEY]['config']['amplitude'][0]
+    v_max = yaml_config['dynamic_devices'][RF_CAL_KEY]['config']['amplitude'][1]
     v_steps = yaml_config['dynamic_steps']
     v_axis = np.linspace(v_min, v_max, v_steps)
     return v_axis
