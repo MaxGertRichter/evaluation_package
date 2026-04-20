@@ -21,7 +21,8 @@ pip install -e .
 ```
 
 ## Quick Start
-Example templates and datasets are provided to test functionality. 
+
+Example templates and datasets are provided to test functionality.
 
 1. Navigate to the `example_notebooks/` directory.
 2. Open the desired Jupyter Notebook (e.g., `01_ESR_eval.ipynb`).
@@ -35,9 +36,9 @@ Standard analysis dictates adjustments to the global `config.yaml` located at th
 # 1. Base Directory Mounting
 # Absolute paths to the main data directories per operating system.
 data_folder_home:
-  Windows: "G:\Bucherlab\Sensitivity_Optimization"
-  Darwin: "/Volumes/001/Bucherlab/Sensitivity_Optimization"
-  default: "./data"
+  Windows: G:\folder1\folder2\folder3
+  Darwin: /Volumes/001/folder1/folder2/folder3
+  default: ./data
 
 # 2. Hardware Channel Indexing
 # Defines the array indices corresponding to logic signals from the DAQ.
