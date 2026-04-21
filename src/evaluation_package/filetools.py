@@ -102,16 +102,26 @@ def load_experiment_data(experiment_type: str, subfolders: Union[str, list, tupl
         except YAMLError as exc:
             print(f"Error in YAML file: {exc}")
             raise
+    import re
     data = []
     if "save_in_chunks" in yaml_data["data"]:
-        for i in np.arange(yaml_data["averages"]//yaml_data["data"]["save_in_chunks"]):
-            chunk_file = data_file.replace(experiment_type+"_ch-0", experiment_type+f"_ch-{i}")
-            print(f"Loading chunk file: {chunk_file}")
+        # Use regex to find and replace the chunk index marker (_ch-N_)
+        chunk_pattern = re.compile(r"_ch-\d+_")
+        num_chunks = int(yaml_data["averages"] // yaml_data["data"]["save_in_chunks"])
+        
+        for i in range(num_chunks):
+            # Transform whatever chunk index was found (e.g. _ch-9_) into the current loop index
+            chunk_file = chunk_pattern.sub(f"_ch-{i}_", data_file)
+            
+            if kwargs.get("print", False):
+                print(f"Loading chunk file: {chunk_file}")
+            
             chunk_data = np.load(directory / chunk_file)
             data.append(chunk_data)
-            
-    
-    data.append(np.load(directory / data_file))
+    else:
+        # Standard non-chunked experiment
+        data.append(np.load(directory / data_file))
+        
     return yaml_data, data
     
 # Sync the yaml files in a directory with a master yaml file

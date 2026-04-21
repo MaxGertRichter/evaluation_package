@@ -4,15 +4,16 @@ A Python library for the evaluation and analysis of Nitrogen-Vacancy (NV) center
 
 ## Features
 
-- **ESR Analysis (`esr.py`)**: Lorentzian fitting, resonance frequency extraction, and contrast calculation for Electron Spin Resonance spectra.
-- **Rabi Oscillations (`rabi.py`)**: Extraction of $\pi$-pulse durations, Rabi frequencies, and signal contrast sequences.
-- **CASR Protocols (`casr.py` & `casr_calibration.py`)**: Fast Fourier Transform (FFT) methods for Continuous AC Sensing and Ranging. Includes functions for sensitivity calculation, noise floor estimation, and RF amplitude calibration.
+- **ESR Analysis (`esr.py`)**: Resonance frequency and data extraction for Electron Spin Resonance spectra.
+- **Rabi Oscillations (`rabi.py`)**: Extraction of $\pi$-pulse durations of Rabi experiments.
+- **CASR Protocols (`casr.py` & `casr_calibration.py`)**: Fast Fourier Transform (FFT) methods for CASR Sensing and Calibration. Includes functions for sensitivity calculation, noise floor estimation, and RF amplitude calibration.
 - **Data Management (`filetools.py`)**: Automated loading and formatting of multidimensional NumPy arrays coupled with YAML configuration definitions.
+- **Utilities (`utils.py`)**: Utility functions for data processing and analysis, like unified contrast calculation and light level.
 - **Cross-Platform Compatibility**: Path resolution natively supports experimental data structures across Windows, macOS, and Linux.
 
 ## Installation
 
-Clone the repository and install the package via pip in editable mode to ensure changes propagate to operational environments:
+Clone or fork the repository and install the package via pip in editable mode to ensure changes are possible for unqiue customizations:
 
 ```bash
 git clone https://github.com/MaxGertRichter/evaluation_package.git
@@ -30,7 +31,7 @@ Example templates and datasets are provided to test functionality.
 
 ## Configuration
 
-Standard analysis dictates adjustments to the global `config.yaml` located at the project root format. This file manages hardware channel mappings and remote data mounting points without requiring source code modifications.
+Standard analysis dictates adjustments to the global `config.yaml` located at the project root. This file manages hardware channel mappings and remote data mounting points without requiring source code modifications.
 
 ```yaml
 # 1. Base Directory Mounting
