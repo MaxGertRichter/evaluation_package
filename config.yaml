@@ -8,7 +8,7 @@
 # The package will automatically use the correct path depending on your OS.
 # The defaults currently point to the included 'example_data' directory for testing out-of-the-box.
 data_folder_home:
-  Windows: ./example_data # Example for your specific setup: 'G:\Bucherlab\...'
+  Windows: G:\Bucherlab\Table Top Julia\Experiment\QupytMessungen\2026-04-07 DebugNMR and Galvo # Example for your specific setup: 'G:\Bucherlab\...'
   Darwin: ./example_data # Example for Macs: '/Volumes/001/Bucherlab/...'
   default: ./example_data
 
@@ -17,10 +17,10 @@ data_folder_home:
 # Because the physical wiring layout on DAQ boards can differ between
 # computers and setups, you can globally flip the mappings here.
 data_channels:
-  reference: 0
-  measurement: 1
+  reference: 1
+  measurement: 0
 
 # 3. Calibration Keys
 # Choose the key identifier present in your generated data measurement
 # yaml configs indicating which signal source performs the CASR calibration.
-rf_calibration_device_key: "rf_source" # Alternative used in other forks: "rf_calibration_source"
+rf_calibration_device_key: "rf_calibration_source" # Alternative used in other forks: "rf_calibration_source"
