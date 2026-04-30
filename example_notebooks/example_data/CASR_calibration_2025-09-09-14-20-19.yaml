@@ -1,0 +1,66 @@
+averages: 100
+data:
+  averaging_mode: spread
+  dynamic_steps: 100
+duration_puseseq_cycle: 149.0
+dynamic_devices:
+  rf_source:
+    address: TCPIP::10.152.23.160::INSTR
+    config:
+      amplitude:
+      - 0
+      - 2.0
+      frequency:
+      - 1.9994e6
+      - 1.9994e6
+    device_type: Rigol
+dynamic_steps: 100
+experiment_type: CASR_calibration
+filename: CASR_calibration_2025-09-09-14-20-19
+measurement_status: all_fail
+ps_path: G:\Bucherlab\People\Current People\Max\Build up files\08_Dev Pulse seqeunces\CASR_sweep.py
+pulse_sequence:
+  N: 16
+  duration_offset: 0
+  laserduration: 35
+  mixing_frequency: 500e6
+  n_dynamic_steps: 100
+  n_meas: 100
+  pi: 0.084
+  pi_half: 0.042
+  readout_phase: 0
+  readout_time: 22
+  sampling_rate: 50e9
+  seq_type: XY8
+  tau: 0.125
+  ts_end: 1
+  ts_start: 1
+qupyt_version: 0.1.dev133+gf480c27
+sensor:
+  config:
+    apd_input: Dev8/ai0
+    max_voltage: 5.0
+    min_voltage: -5.0
+    number_measurements: 100
+  type: DAQ
+static_devices:
+  mw_source:
+    address: TCPIP::10.152.23.25::INSTR
+    config:
+      amplitude: 16
+      frequency: 1.8287e9
+    device_type: SRS
+synchroniser:
+  channel_mapping:
+    LASER: 1
+    MW: 0
+    READ: 2
+    RF: C
+    START: A
+    WAIT: B
+  config:
+    address: TCPIP0::10.152.23.129::inst0::INSTR
+    channels:
+    - 1
+    sampling_rate: 50e9
+  type: TekAWG

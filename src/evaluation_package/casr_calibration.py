@@ -4,6 +4,9 @@ from scipy.signal import savgol_filter, find_peaks
 from scipy.optimize import curve_fit
 from matplotlib import pyplot as plt
 from evaluation_package import utils as ut
+from evaluation_package.config import config
+
+RF_CAL_KEY = config.rf_calibration_device_key
 
 def calc_b_ac(yaml_config: dict) -> float:
     """Calculates the magnetic field strength b_ac for the CASR calibration, 
@@ -14,7 +17,7 @@ def calc_b_ac(yaml_config: dict) -> float:
     yaml_config : dict
         The configuration yaml_file to configrue the experiment.
     """
-    f_rf = yaml_config['dynamic_devices']['rf_source']['config']['frequency'][0]
+    f_rf = yaml_config['dynamic_devices'][RF_CAL_KEY]['config']['frequency'][0]
     N = yaml_config['pulse_sequence']['N'] * 8 # assuming it is a XY8 block
     g_e = constants.physical_constants['electron g factor'][0] *-1
     mu_B = constants.physical_constants['Bohr magneton'][0]
@@ -36,8 +39,8 @@ def calc_Vpp_list(yaml_config: dict) -> np.ndarray:
     v_axis : np.ndarray
         The voltage axis for the CASR calibration experiment.
     """
-    v_min = yaml_config['dynamic_devices']['rf_source']['config']['amplitude'][0]
-    v_max = yaml_config['dynamic_devices']['rf_source']['config']['amplitude'][1]
+    v_min = yaml_config['dynamic_devices'][RF_CAL_KEY]['config']['amplitude'][0]
+    v_max = yaml_config['dynamic_devices'][RF_CAL_KEY]['config']['amplitude'][1]
     v_steps = yaml_config['dynamic_steps']
     v_axis = np.linspace(v_min, v_max, v_steps)
     return v_axis
@@ -105,7 +108,7 @@ def find_special_dips(
         out["baseline"] = y_slow
     return out
 
-def find_backfolding_index(contrast: np.ndarray) -> int:
+def find_backfolding_index(contrast: np.ndarray, maxmin_type = "slow_maxima",idx = 1) -> int:
     """Calculates the index where the backfolding during the CASR calibration happens
 
     Parameters
@@ -120,7 +123,7 @@ def find_backfolding_index(contrast: np.ndarray) -> int:
     """
     summed_contrast = np.sum(contrast, axis=0)
     dict_minmax = find_special_dips(summed_contrast)
-    backfold_id = dict_minmax["slow_minima"][1]
+    backfold_id = dict_minmax[maxmin_type][idx]
     return backfold_id
 
 
@@ -133,7 +136,7 @@ def b_sine(x, V, O, A, ϕ):
 
 
 
-def plot_casr_clibration(yaml_config: dict, data: np.ndarray) -> None:
+def plot_casr_clibration(yaml_config: dict, data: np.ndarray, maxmin_type = "slow_maxima", idx = 1) -> None:
     """Plots the CASR calibration and fits a sine to the backfolding maxima. Prints the voltage needed to generate a 10 nT signal.
 
     Parameters
@@ -143,8 +146,9 @@ def plot_casr_clibration(yaml_config: dict, data: np.ndarray) -> None:
     data : np.ndarray
         The measurment data array of the CASR calibration.
     """
-    contrast = ut.contrast(data)
-    backfold_id = find_backfolding_index(contrast)
+    avg = yaml_config['averages']
+    contrast = ut.contrast(data, experiment_type ="CASR_sensitivity") / avg
+    backfold_id = find_backfolding_index(contrast, maxmin_type, idx)
     maximas_backfolding = contrast[:, backfold_id]
     v_axis = calc_Vpp_list(yaml_config)
     opt, _ = curve_fit(b_sine, v_axis, maximas_backfolding, p0=[v_axis[-1], 0, max(maximas_backfolding), 0])
@@ -152,12 +156,13 @@ def plot_casr_clibration(yaml_config: dict, data: np.ndarray) -> None:
     C = b_ac/opt[0]
     V_for_10_nT = 10e-9 / C
     print(f'You need {V_for_10_nT:.4f} V to generate a 10 nT Signal')
+    print("Optimization parameters are: ", opt)
     plt.plot(v_axis, maximas_backfolding, label="Data")
     plt.plot(v_axis, b_sine(v_axis, *opt), label=f'b_ac = {b_ac:.2e} T\nb/V = {b_ac/opt[0]:.2e} T/V')
     plt.legend()
     plt.xlabel("Vpp (V)")
 
-def check_backfolding_index(contrast: np.ndarray) -> None:
+def check_backfolding_index(contrast: np.ndarray, maxmin_type = "slow_maxima", idx = 1) -> None:
     """Checks id the index for the backfolding is in the middle of the peak
 
     Parameters
@@ -165,7 +170,7 @@ def check_backfolding_index(contrast: np.ndarray) -> None:
     contrast : np.ndarray
         contrast array of the CASR calibration
     """
-    backfold_id = find_backfolding_index(contrast)
+    backfold_id = find_backfolding_index(contrast, maxmin_type, idx)
     print(f"The backfolding index is {backfold_id}")
     for i in range(len(contrast)):
         plt.plot(contrast[i])

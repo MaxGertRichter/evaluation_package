@@ -1,19 +1,68 @@
 # Evaluation Package
 
-A Python package for evaluating quantum sensing experiments. At the moment it includes evaluation code for analyzing ESR (Electron Spin Resonance) and Rabi measurements.
+A Python library for the evaluation and analysis of Nitrogen-Vacancy (NV) center quantum sensing experiments. This package provides data processing pipelines for standard measurement protocols, from raw data ingestion to spectral analysis and parameter extraction.
 
 ## Features
 
-- Load and process experiment data from YAML and NumPy files
-- Calculate ESR spectra and analyze peaks
-- Process Rabi oscillation measurements
-- Calculate light levels and contrast
-- Cross-platform support (Windows and macOS)
+- **ESR Analysis (`esr.py`)**: Resonance frequency and data extraction for Electron Spin Resonance spectra.
+- **Rabi Oscillations (`rabi.py`)**: Extraction of $\pi$-pulse durations of Rabi experiments.
+- **CASR Protocols (`casr.py` & `casr_calibration.py`)**: Fast Fourier Transform (FFT) methods for CASR Sensing and Calibration. Includes functions for sensitivity calculation, noise floor estimation, and RF amplitude calibration.
+- **Data Management (`filetools.py`)**: Automated loading and formatting of multidimensional NumPy arrays coupled with YAML configuration definitions.
+- **Utilities (`utils.py`)**: Utility functions for data processing and analysis, like unified contrast calculation and light level.
+- **Cross-Platform Compatibility**: Path resolution natively supports experimental data structures across Windows, macOS, and Linux.
 
 ## Installation
 
-TODO:
+Clone or fork the repository and install the package via pip in editable mode to ensure changes are possible for unqiue customizations:
 
 ```bash
-
+git clone https://github.com/MaxGertRichter/evaluation_package.git
+cd evaluation_package
+pip install -e .
 ```
+
+## Quick Start
+
+Example templates and datasets are provided to test functionality.
+
+1. Navigate to the `example_notebooks/` directory.
+2. Open the desired Jupyter Notebook (e.g., `01_ESR_eval.ipynb`).
+3. Execute the cells. The notebooks are bound to local sample data situated in `example_notebooks/example_data`.
+
+## Configuration
+
+Standard analysis dictates adjustments to the global `config.yaml` located at the project root. This file manages hardware channel mappings and remote data mounting points without requiring source code modifications.
+
+```yaml
+# 1. Base Directory Mounting
+# Absolute paths to the main data directories per operating system.
+data_folder_home:
+  Windows: G:\folder1\folder2\folder3
+  Darwin: /Volumes/001/folder1/folder2/folder3
+  default: ./data
+
+# 2. Hardware Channel Indexing
+# Defines the array indices corresponding to logic signals from the DAQ.
+data_channels:
+  reference: 0
+  measurement: 1
+
+# 3. Instrument Definitions
+# Key definitions matching the YAML hardware logs. Defines target devices.
+rf_calibration_device_key: "rf_source"
+```
+
+## Version Tracking
+
+Maintain strict version control of software dependencies for reproducibility constraints.
+
+The package instance provides version access natively:
+
+```python
+import evaluation_package
+import evaluation_package.__version__ as version
+
+print(f"Evaluation Package v{version}")
+```
+
+Plot titles and exported figures should list the package version utilized during the rendering frame to ensure historical compliance.

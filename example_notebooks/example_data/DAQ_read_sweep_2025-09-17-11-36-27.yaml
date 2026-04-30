@@ -1,0 +1,44 @@
+averages: 100
+data:
+  averaging_mode: spread
+  dynamic_steps: 1
+dynamic_devices: null
+dynamic_steps: 1
+experiment_type: DAQ_read_sweep
+filename: DAQ_read_sweep_2025-09-17-11-36-27
+measurement_status: all_fail
+ps_path: G:\Bucherlab\People\Current People\Max\Build up files\07_Standard_Pulse_Sequences\DAQ_read_sweep_sequence_full.py
+pulse_sequence:
+  laser_duration: 5
+  max_delay: 3
+  mixing_freq: 500e6
+  n_meas: 100
+  pi: 0.088
+qupyt_version: 0.1.dev133+gf480c27
+sensor:
+  config:
+    apd_input: Dev8/ai0
+    max_voltage: 5.0
+    min_voltage: -5.0
+    number_measurements: 100
+  type: DAQ
+static_devices:
+  mw_source:
+    address: TCPIP::10.152.23.25::INSTR
+    config:
+      amplitude: 10
+      frequency: 1.6935e9
+    device_type: SRS
+synchroniser:
+  channel_mapping:
+    LASER: 1
+    MW: 0
+    READ: 2
+    START: A
+    WAIT: B
+  config:
+    address: TCPIP0::10.152.23.129::inst0::INSTR
+    channels:
+    - 1
+    sampling_rate: 50e9
+  type: TekAWG

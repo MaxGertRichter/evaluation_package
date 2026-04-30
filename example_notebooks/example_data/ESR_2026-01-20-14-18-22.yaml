@@ -1,0 +1,50 @@
+averages: 1
+data:
+  averaging_mode: sum
+  dynamic_steps: 200
+dynamic_devices:
+  mw_source:
+    address: TCPIP::192.168.1.3::INSTR
+    config:
+      amplitude:
+      - -10
+      - -10
+      frequency:
+      - 2.0e9
+      - 4.0e9
+    device_type: SMB
+dynamic_steps: 200
+experiment_type: ESR
+filename: ESR_2026-01-20-14-18-22
+measurement_status: success
+ps_path: G:\Bucherlab\People\Current People\Max\Build up files\07_Standard_Pulse_Sequences\sequence\ESR_pulse_test.py
+pulse_sequence:
+  READ_duration: 2
+  READ_start: 1.29
+  laser_duration: 10
+  laser_start: 1
+  mw_duration: 6
+  mw_start: 12
+  number_measurements: 5000
+qupyt_version: 0.1.dev133+gf480c27
+sensor:
+  config:
+    apd_input: Dev8/ai0
+    max_voltage: 5.0
+    min_voltage: -5.0
+    number_measurements: 5000
+  type: DAQ
+static_devices: null
+synchroniser:
+  channel_mapping:
+    LASER: 1
+    MW: 0
+    READ: 2
+    START: A
+    WAIT: B
+  config:
+    address: TCPIP::192.168.1.2::inst0::INSTR
+    channels:
+    - 1
+    sampling_rate: 20e9
+  type: TekAWG
